@@ -1,0 +1,40 @@
+﻿  basic_geometry.cpp
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\basic_geometry.cpp(170,32): warning C4267: 'argument': conversion from 'size_t' to 'int', possible loss of data
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\basic_geometry.cpp(292,44): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\basic_geometry.cpp(294,44): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\basic_geometry.cpp(297,48): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\basic_geometry.cpp(299,48): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\basic_geometry.cpp(315,45): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\basic_geometry.cpp(317,45): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\basic_geometry.cpp(320,53): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\basic_geometry.cpp(322,53): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\basic_geometry.cpp(406,11): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\basic_geometry.cpp(414,11): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\basic_geometry.cpp(434,11): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\basic_geometry.cpp(455,48): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\basic_geometry.cpp(456,48): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+  lightDemo.cpp
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\lightDemo.cpp(146,33): warning C4305: 'argument': truncation from 'double' to 'float'
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\lightDemo.cpp(208,107): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\lightDemo.cpp(208,74): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\lightDemo.cpp(208,57): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\lightDemo.cpp(208,24): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+  mathUtility.cpp
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\mathUtility.cpp(142,11): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\mathUtility.cpp(143,11): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\mathUtility.cpp(231,10): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\mathUtility.cpp(357,12): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\mathUtility.cpp(384,8): warning C4244: 'return': conversion from 'double' to 'float', possible loss of data
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\mathUtility.cpp(483,62): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\mathUtility.cpp(484,62): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\mathUtility.cpp(486,40): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+  renderer.cpp
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\renderer.cpp(292,49): warning C4244: '-=': conversion from 'double' to 'float', possible loss of data
+C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\MyAVT_Template\renderer.cpp(298,49): warning C4244: '+=': conversion from 'double' to 'float', possible loss of data
+  Generating code
+  0 of 649 functions ( 0.0%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    0 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  MyAVT_Template.vcxproj -> C:\Users\JAP\Dropbox\jap\IST\cadeiras\AVT\Programming\MyAVT_Template\x64\Release\MyAVT_Template.exe
+  0 File(s) copied

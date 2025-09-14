@@ -1,0 +1,81 @@
+﻿  lightDemo.cpp
+C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(73,8): error C2065: 'vec3': undeclared identifier
+C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(73,1): error C2923: 'std::vector': 'vec3' is not a valid template type argument for parameter '_Ty'
+      C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(73,8):
+      see declaration of 'vec3'
+  
+C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(73,1): error C2976: 'std::vector': too few template arguments
+      C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\vector(442,7):
+      see declaration of 'std::vector'
+  
+C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(73,37): error C2514: 'std::vector': class template cannot be constructed
+      C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\vector(442,7):
+      see declaration of 'std::vector'
+  
+C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(152,33): warning C4305: 'argument': truncation from 'double' to 'float'
+C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(202,28): error C2678: binary '[': no operator found which takes a left-hand operand of type 'std::vector' (or there is no acceptable conversion)
+      C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\vector(1937,40):
+      could be 'const _Ty &std::vector<_Ty,_Alloc>::operator [](const allocator_traits<allocator_traits<_Alloc>::rebind_alloc<_Ty>>::size_type) noexcept const'
+          C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(202,28):
+          'const _Ty &std::vector<_Ty,_Alloc>::operator [](const allocator_traits<allocator_traits<_Alloc>::rebind_alloc<_Ty>>::size_type) noexcept const': cannot convert 'this' pointer from 'std::vector' to 'const std::vector<_Ty,_Alloc> &'
+              C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(202,28):
+              Reason: cannot convert from 'std::vector' to 'const std::vector<_Ty,_Alloc>'
+              C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(202,28):
+              Conversion requires a second user-defined-conversion operator or constructor
+      C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\vector(1927,34):
+      or       '_Ty &std::vector<_Ty,_Alloc>::operator [](const allocator_traits<allocator_traits<_Alloc>::rebind_alloc<_Ty>>::size_type) noexcept'
+          C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(202,28):
+          '_Ty &std::vector<_Ty,_Alloc>::operator [](const allocator_traits<allocator_traits<_Alloc>::rebind_alloc<_Ty>>::size_type) noexcept': cannot convert 'this' pointer from 'std::vector' to 'std::vector<_Ty,_Alloc> &'
+              C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(202,28):
+              Reason: cannot convert from 'std::vector' to 'std::vector<_Ty,_Alloc>'
+              C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(202,28):
+              Conversion requires a second user-defined-conversion operator or constructor
+      C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(202,28):
+      while trying to match the argument list '(std::vector, int)'
+  
+C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(202,55): error C2678: binary '[': no operator found which takes a left-hand operand of type 'std::vector' (or there is no acceptable conversion)
+      C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\vector(1937,40):
+      could be 'const _Ty &std::vector<_Ty,_Alloc>::operator [](const allocator_traits<allocator_traits<_Alloc>::rebind_alloc<_Ty>>::size_type) noexcept const'
+          C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(202,55):
+          'const _Ty &std::vector<_Ty,_Alloc>::operator [](const allocator_traits<allocator_traits<_Alloc>::rebind_alloc<_Ty>>::size_type) noexcept const': cannot convert 'this' pointer from 'std::vector' to 'const std::vector<_Ty,_Alloc> &'
+              C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(202,55):
+              Reason: cannot convert from 'std::vector' to 'const std::vector<_Ty,_Alloc>'
+              C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(202,55):
+              Conversion requires a second user-defined-conversion operator or constructor
+      C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\vector(1927,34):
+      or       '_Ty &std::vector<_Ty,_Alloc>::operator [](const allocator_traits<allocator_traits<_Alloc>::rebind_alloc<_Ty>>::size_type) noexcept'
+          C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(202,55):
+          '_Ty &std::vector<_Ty,_Alloc>::operator [](const allocator_traits<allocator_traits<_Alloc>::rebind_alloc<_Ty>>::size_type) noexcept': cannot convert 'this' pointer from 'std::vector' to 'std::vector<_Ty,_Alloc> &'
+              C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(202,55):
+              Reason: cannot convert from 'std::vector' to 'std::vector<_Ty,_Alloc>'
+              C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(202,55):
+              Conversion requires a second user-defined-conversion operator or constructor
+      C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(202,55):
+      while trying to match the argument list '(std::vector, int)'
+  
+C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(202,82): error C2678: binary '[': no operator found which takes a left-hand operand of type 'std::vector' (or there is no acceptable conversion)
+      C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\vector(1937,40):
+      could be 'const _Ty &std::vector<_Ty,_Alloc>::operator [](const allocator_traits<allocator_traits<_Alloc>::rebind_alloc<_Ty>>::size_type) noexcept const'
+          C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(202,82):
+          'const _Ty &std::vector<_Ty,_Alloc>::operator [](const allocator_traits<allocator_traits<_Alloc>::rebind_alloc<_Ty>>::size_type) noexcept const': cannot convert 'this' pointer from 'std::vector' to 'const std::vector<_Ty,_Alloc> &'
+              C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(202,82):
+              Reason: cannot convert from 'std::vector' to 'const std::vector<_Ty,_Alloc>'
+              C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(202,82):
+              Conversion requires a second user-defined-conversion operator or constructor
+      C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\vector(1927,34):
+      or       '_Ty &std::vector<_Ty,_Alloc>::operator [](const allocator_traits<allocator_traits<_Alloc>::rebind_alloc<_Ty>>::size_type) noexcept'
+          C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(202,82):
+          '_Ty &std::vector<_Ty,_Alloc>::operator [](const allocator_traits<allocator_traits<_Alloc>::rebind_alloc<_Ty>>::size_type) noexcept': cannot convert 'this' pointer from 'std::vector' to 'std::vector<_Ty,_Alloc> &'
+              C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(202,82):
+              Reason: cannot convert from 'std::vector' to 'std::vector<_Ty,_Alloc>'
+              C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(202,82):
+              Conversion requires a second user-defined-conversion operator or constructor
+      C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(202,82):
+      while trying to match the argument list '(std::vector, int)'
+  
+C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(202,6): error C2660: 'gmu::translate': function does not take 1 arguments
+      C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\mathUtility.h(93,10):
+      see declaration of 'gmu::translate'
+      C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(202,6):
+      while trying to match the argument list '(gmu::MatrixTypes)'
+  
