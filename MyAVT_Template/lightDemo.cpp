@@ -30,7 +30,7 @@
 
 using namespace std;
 
-#define CAPTION "AVT 2025 Welcome Demo"
+#define CAPTION "AVT - Lab Assignment 1"
 int WindowHandle = 0;
 int WinX = 1024, WinY = 768;
 
@@ -51,6 +51,10 @@ float camX, camY, camZ;
 // Camera Spherical Coordinates
 float alpha = 57.0f, beta = 18.0f;
 float r = 45.0f;
+
+// Camera modes
+enum CameraMode { FOLLOW, TOP_ORTHO, TOP_PERSPECTIVE};
+CameraMode cameraMode = FOLLOW;
 
 // Mouse Tracking Variables
 int startX, startY, tracking = 0;
@@ -76,12 +80,23 @@ struct vec3 {
 };
 
 vector<vec3> drone_parts_position = {
-	{-0.625f, 8.0f, -0.375f},   // Main body (cube)
-	{0.625f, 8.0f, 0.5f},
-	{0.625f, 8.0f, -0.5f},
-	{-0.625f, 8.0f, -0.5f},
-	{-0.625f, 8.0f, 0.5f}
+	{-0.625f, 0.0f, -0.375f},   // Main body (cube)
+	{0.625f, 0.0f, 0.5f},
+	{0.625f, 0.0f, -0.5f},
+	{-0.625f, 0.0f, -0.5f},
+	{-0.625f, 0.0f, 0.5f}
 };
+
+struct Drone {
+    float pos[3] = {1.0f, 10.0f, -2.0f}; // Initial position
+	float dir[3] = {0.0f, 1.0f, 0.0f}; // Initial direction (pointing up)
+	float velocity[3] = {0.0f, 0.0f, 0.0f}; // Initial velocity
+    float throttle = 0.0f;             // current throttle level
+    float yaw = 0.0f;      // Rotation around Y (degrees)
+    float pitch = 0.0f;    // Forward/backward tilt (degrees)
+    float roll = 0.0f;     // Left/right tilt (degrees)
+};
+Drone drone;
 
 /// ::::::::::::::::::::::::::::::::::::::::::::::::CALLBACK FUNCIONS:::::::::::::::::::::::::::::::::::::::::::::::::://///
 
@@ -123,8 +138,88 @@ void changeSize(int w, int h) {
 
 // ------------------------------------------------------------
 //
+// Update Drone State
+//
+
+void updateDroneState(float dt) {
+	// Parameters (tweak to taste)
+    const float maxThrottle = 10.0f;   // upward accel when throttleCmd == 1
+    const float maxTilt = 45.0f;            // degrees: maximum pitch/roll allowed
+	
+	// Limits
+	if (drone.yaw > 360.0f || drone.yaw < -360.0f) drone.yaw = 0.0f;
+
+	if (drone.pitch > maxTilt) drone.pitch = maxTilt;
+	if (drone.pitch < -maxTilt) drone.pitch = -maxTilt;
+
+	if (drone.roll  > maxTilt) drone.roll  = maxTilt;
+	if (drone.roll  < -maxTilt) drone.roll  = -maxTilt;
+
+	if (drone.throttle > maxThrottle) drone.throttle = maxThrottle;
+	if (drone.throttle < -maxThrottle) drone.throttle = -maxThrottle;
+
+	float pitchRad = drone.pitch * 3.14159265f / 180.0f;
+	float rollRad  = drone.roll  * 3.14159265f / 180.0f;
+	float yawRad   = drone.yaw   * 3.14159265f / 180.0f; 
+
+	const float maxTiltRad = maxTilt * 3.14159265f / 180.0f;
+
+    if (dt <= 0.0f) return;
+
+	drone.dir[0] = cos(yawRad) * (- sin(pitchRad) / sin(maxTiltRad)) + sin(yawRad) * (sin(rollRad) / sin(maxTiltRad));
+	drone.dir[1] = cos(3.14159f / 2 * fabs(pitchRad / maxTiltRad)) * cos(3.14159f / 2 * fabs(rollRad / maxTiltRad));
+	drone.dir[2] = cos(yawRad) * (sin(rollRad) / sin(maxTiltRad)) + sin(yawRad) * (sin(pitchRad) / sin(maxTiltRad));
+
+	drone.velocity[0] = drone.throttle * drone.dir[0];
+	drone.velocity[1] = drone.throttle * drone.dir[1];
+	drone.velocity[2] = drone.throttle * drone.dir[2];
+
+	drone.pos[0] += drone.velocity[0] * dt;
+    drone.pos[1] += drone.velocity[1] * dt;
+    drone.pos[2] += drone.velocity[2] * dt;
+}
+
+
+// ------------------------------------------------------------
+//
 // Render stufff
 //
+
+void drawDrone(dataMesh &data) {
+    mu.pushMatrix(gmu::MODEL);
+	mu.translate(gmu::MODEL, drone.pos[0], drone.pos[1], drone.pos[2]);
+	mu.rotate(gmu::MODEL, drone.yaw,   0, 1, 0);
+    mu.rotate(gmu::MODEL, drone.pitch, 0, 0, 1);
+    mu.rotate(gmu::MODEL, drone.roll,  1, 0, 0);
+
+	for (int i = 0; i < 5; i++) {
+		if (i==0) {
+			data.meshID = 0;
+		} else {
+			data.meshID = 3;
+		}
+		mu.pushMatrix(gmu::MODEL);
+		mu.translate(gmu::MODEL, drone_parts_position[i].x, drone_parts_position[i].y, drone_parts_position[i].z);
+		if (i == 0) {
+			mu.scale(gmu::MODEL, 1.25f, 0.15f, 0.75f);
+		} else if (i > 0 && i < 3) {
+			mu.scale(gmu::MODEL, 0.5f, 0.05f, 0.5f);
+		} else {
+			mu.scale(gmu::MODEL, 0.625f, 0.05f, 0.625f);
+		}
+
+		mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+		mu.computeNormalMatrix3x3();
+
+		data.texMode = 1;   //modulate diffuse color with texel color
+		data.vm = mu.get(gmu::VIEW_MODEL),
+		data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+		data.normal = mu.getNormalMatrix();
+		renderer.renderMesh(data);
+
+		mu.popMatrix(gmu::MODEL);
+	}
+}
 
 void renderSim(void) {
 
@@ -142,8 +237,29 @@ void renderSim(void) {
 	// load identity matrices
 	mu.loadIdentity(gmu::VIEW);
 	mu.loadIdentity(gmu::MODEL);
-	// set the camera using a function similar to gluLookAt
-	mu.lookAt(camX, camY, camZ, 0, 0, 0, 0, 1, 0);
+	
+	switch (cameraMode) {
+		case FOLLOW:
+			mu.lookAt(drone.pos[0] + camX, drone.pos[1] + camY,  drone.pos[2] + camZ, 
+					  drone.pos[0] + 1.0f, drone.pos[1] + 0.25f, drone.pos[2] + 1.0f, 
+					  0, 1, 0);
+			break;
+		case TOP_ORTHO:
+			mu.lookAt(0, 50, 0, 
+					  0, 0,  0, 
+					  0, 0, -1);
+			mu.loadIdentity(gmu::PROJECTION);
+			mu.ortho(-30, 30, -30, 30, -100, 100);
+			break;
+		
+		case TOP_PERSPECTIVE:
+			mu.lookAt(0, 50, 0, 
+					  0, 0,  0, 
+					  0, 0, -1);
+			mu.loadIdentity(gmu::PROJECTION);
+			mu.perspective(53.13f, (1.0f * WinX) / WinY, 0.1f, 1000.0f);
+			break;
+	}
 
 	//send the light position in eye coordinates
 	//renderer.setLightPos(lightPos); //efeito capacete do mineiro, ou seja lighPos foi definido em eye coord 
@@ -156,7 +272,6 @@ void renderSim(void) {
 	renderer.setSpotLightMode(spotlight_mode);
 	renderer.setSpotParam(coneDir, 0.93f);
 
-	dataMesh data;
 	
 	// Draw the terrain - myMeshes[6] contains the Quad object
 	mu.pushMatrix(gmu::MODEL);
@@ -166,6 +281,8 @@ void renderSim(void) {
 
 	mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
 	mu.computeNormalMatrix3x3();
+
+	dataMesh data;
 
 	data.meshID = 6; // For the terrain (last mesh)
 	data.texMode = 0; //modulate diffuse color with texel color
@@ -196,46 +313,28 @@ void renderSim(void) {
 		}
 	}
 
-	
-	mu.pushMatrix(gmu::MODEL);
-	mu.translate(gmu::MODEL, -5.0f, 0.0f, -5.0f);
-	for (int i = 0; i < 5; i++) {
-		if (i==0) {
-			data.meshID = 0;
-		} else {
-			data.meshID = 3;
-		}
-		mu.pushMatrix(gmu::MODEL);
-		mu.translate(gmu::MODEL, drone_parts_position[i].x, drone_parts_position[i].y, drone_parts_position[i].z);
-		if (i == 0) {
-			mu.scale(gmu::MODEL, 1.25f, 0.15f, 0.75f);
-		} else if (i > 0 && i < 3) {
-			mu.scale(gmu::MODEL, 0.5f, 0.05f, 0.5f);
-		} else {
-			mu.scale(gmu::MODEL, 0.625f, 0.05f, 0.625f);
-		}
+	//Update Drone State
+	static int lastTime = glutGet(GLUT_ELAPSED_TIME);
+    int now = glutGet(GLUT_ELAPSED_TIME);
+    float dt = (now - lastTime) * 0.001f;
+	lastTime = now;
+    updateDroneState(dt);
 
-		mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
-		mu.computeNormalMatrix3x3();
-
-		data.texMode = 1;   //modulate diffuse color with texel color
-		data.vm = mu.get(gmu::VIEW_MODEL),
-		data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
-		data.normal = mu.getNormalMatrix();
-		renderer.renderMesh(data);
-
-		mu.popMatrix(gmu::MODEL);
-	}
-
+	drawDrone(data);
 	
 
 	//Render text (bitmap fonts) in screen coordinates. So use ortoghonal projection with viewport coordinates.
 	//Each glyph quad texture needs just one byte color channel: 0 in background and 1 for the actual character pixels. Use it for alpha blending
 	//text to be rendered in last place to be in front of everything
 	
-	/*if(fontLoaded) {
+	if(fontLoaded) {
 		glDisable(GL_DEPTH_TEST);
-		TextCommand textCmd = { "AVT 2025 Welcome:\nGood Luck!", {100, 200}, 0.5 };
+		TextCommand textCmd = { "Yaw: " + std::to_string(drone.yaw) + 
+								"\n\nPitch: " + std::to_string(drone.pitch) + 
+								"\n\nRoll: " + std::to_string(drone.roll) +
+								"\n\n\nThrottle: " + std::to_string(drone.throttle) +
+								"\n\n\nDirection: (" + std::to_string(drone.dir[0]) + ", " + std::to_string(drone.dir[1]) + ", " + std::to_string(drone.dir[2]) + ")", 
+								{30, 450}, 0.3f };
 		//the glyph contains transparent background colors and non-transparent for the actual character pixels. So we use the blending
 		glEnable(GL_BLEND);  
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -256,7 +355,7 @@ void renderSim(void) {
 		glDisable(GL_BLEND);
 		glEnable(GL_DEPTH_TEST);
 		
-	}*/
+	}
 	
 	glutSwapBuffers();
 }
@@ -266,40 +365,58 @@ void renderSim(void) {
 // Events from the Keyboard
 //
 
+void processSpecialKeys(int key, int xx, int yy) {
+    switch (key) {
+        case GLUT_KEY_UP:    drone.pitch -=  2.0f; break; // nose down => forward
+        case GLUT_KEY_DOWN:  drone.pitch +=  2.0; break; // nose up => backward
+        case GLUT_KEY_LEFT:  drone.roll  -=  2.0; break; // roll left
+        case GLUT_KEY_RIGHT: drone.roll  +=  2.0; break; // roll right
+    }
+}
+
+
 void processKeys(unsigned char key, int xx, int yy)
 {
-	switch(key) {
+    switch(key) {
+        case 27:
+            glutLeaveMainLoop();
+            break;
 
-		case 27:
-			glutLeaveMainLoop();
-			break;
+        case 'c':
+            printf("Camera Spherical Coordinates (%f, %f, %f)\n", alpha, beta, r);
+            break;
 
-		case 'c': 
-			printf("Camera Spherical Coordinates (%f, %f, %f)\n", alpha, beta, r);
-			break;
+        case 'l':
+            spotlight_mode = !spotlight_mode;
+            printf("Spotlight toggled: %d\n", spotlight_mode);
+            break;
 
-		case 'l':   //toggle spotlight mode
-			if (!spotlight_mode) {
-				spotlight_mode = true;
-				printf("Point light disabled. Spot light enabled\n");
-			}
-			else {
-				spotlight_mode = false;
-				printf("Spot light disabled. Point light enabled\n");
-			}
-			break;
+        case 'r':
+            alpha = 57.0f; beta = 18.0f; r = 45.0f;
+            camX = r * sin(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
+            camZ = r * cos(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
+            camY = r * sin(beta * 3.14f / 180.0f);
+			drone = Drone(); // reset drone state
+            break;
 
-		case 'r':    //reset
-			alpha = 57.0f; beta = 18.0f;  // Camera Spherical Coordinates
-			r = 45.0f;
-			camX = r * sin(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
-			camZ = r * cos(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
-			camY = r * sin(beta * 3.14f / 180.0f);
-			break;
+        case 'm': glEnable(GL_MULTISAMPLE); break;
+        case 'n': glDisable(GL_MULTISAMPLE); break;
 
-		case 'm': glEnable(GL_MULTISAMPLE); break;
-		case 'n': glDisable(GL_MULTISAMPLE); break;
-	}
+        case '1': cameraMode = TOP_ORTHO; printf("Camera mode: TOP ORTHO\n"); break;
+        case '2': cameraMode = TOP_PERSPECTIVE; printf("Camera mode: TOP PERSPECTIVE\n"); break;
+        case '3': cameraMode = FOLLOW; printf("Camera mode: FOLLOW\n"); break;
+
+        // throttle: set command so updateDroneState integrates throttle
+        case 'w': drone.throttle +=  1.0f; break;
+        case 's': drone.throttle -=  1.0f; break;
+
+        // yaw commands (continuous while key held)
+        case 'a': drone.yaw +=  2.0f; break;
+        case 'd': drone.yaw -=  2.0f; break;
+
+		// Reset drone movement
+		case ' ': drone.pitch = 0.0f; drone.roll = 0.0f; drone.throttle = 0.0f; drone.yaw = 0.0f; break;
+    }
 }
 
 
@@ -541,6 +658,8 @@ int main(int argc, char **argv) {
 	glutMouseFunc(processMouseButtons);
 	glutMotionFunc(processMouseMotion);
 	glutMouseWheelFunc ( mouseWheel ) ;
+
+	glutSpecialFunc(processSpecialKeys);
 	
 
 //	return from main loop

@@ -1,14 +1,9 @@
 {
   "Version": 1,
-  "WorkspaceRootPath": "C:\\Users\\joaof\\Desktop\\AVT_Project\\",
+  "WorkspaceRootPath": "C:\\Users\\tomas\\OneDrive\\Desktop\\University\\AVT\\Lab_Assignment_1\\AVT_Project\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\lightDemo.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
-      "RelativeMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|solutionrelative:MyAVT_Template\\lightDemo.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\renderer.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
-      "RelativeMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|solutionrelative:MyAVT_Template\\renderer.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\tomas\\OneDrive\\Desktop\\University\\AVT\\MyAVT_Template\\Week1_exercise\\MyAVT_Template\\lightDemo.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     }
   ],
   "DocumentGroupContainers": [
@@ -18,36 +13,24 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 0,
+          "SelectedChildIndex": 1,
           "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{56df62a4-05a3-4e5b-aa1a-99371ccfb997}"
+            },
             {
               "$type": "Document",
               "DocumentIndex": 0,
               "Title": "lightDemo.cpp",
-              "DocumentMoniker": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\lightDemo.cpp",
-              "RelativeDocumentMoniker": "MyAVT_Template\\lightDemo.cpp",
-              "ToolTip": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\lightDemo.cpp*",
-              "RelativeToolTip": "MyAVT_Template\\lightDemo.cpp*",
-              "ViewState": "AgIAAJwAAAAAAAAAAAAAALIAAAANAAAAAAAAAA==",
+              "DocumentMoniker": "C:\\Users\\tomas\\OneDrive\\Desktop\\University\\AVT\\MyAVT_Template\\Week1_exercise\\MyAVT_Template\\lightDemo.cpp",
+              "RelativeDocumentMoniker": "..\\..\\MyAVT_Template\\Week1_exercise\\MyAVT_Template\\lightDemo.cpp",
+              "ToolTip": "C:\\Users\\tomas\\OneDrive\\Desktop\\University\\AVT\\MyAVT_Template\\Week1_exercise\\MyAVT_Template\\lightDemo.cpp",
+              "RelativeToolTip": "..\\..\\MyAVT_Template\\Week1_exercise\\MyAVT_Template\\lightDemo.cpp",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-09-15T14:15:19.94Z",
+              "WhenOpened": "2025-09-15T16:00:43.749Z",
               "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 1,
-              "Title": "renderer.h",
-              "DocumentMoniker": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\renderer.h",
-              "RelativeDocumentMoniker": "MyAVT_Template\\renderer.h",
-              "ToolTip": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\renderer.h",
-              "RelativeToolTip": "MyAVT_Template\\renderer.h",
-              "ViewState": "AgIAAAEAAAAAAAAAAAAEwBAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
-              "WhenOpened": "2025-09-15T15:18:22.135Z"
-            },
-            {
-              "$type": "Bookmark",
-              "Name": "ST:0:0:{56df62a4-05a3-4e5b-aa1a-99371ccfb997}"
             }
           ]
         }
