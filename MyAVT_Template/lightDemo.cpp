@@ -70,12 +70,17 @@ bool fontLoaded = false;
 
 float cubeHeights[6][6]; // Store heights for each cube
 
+struct vec3 {
+	float x, y, z;
+	vec3(float x_, float y_, float z_) : x(x_), y(y_), z(z_) {}
+};
+
 vector<vec3> drone_parts_position = {
-	{0.0f, 8.0f, 0.0f},   // Main body (cube)
-	{0.0f, 10.0f, 0.0f},  // Top part (sphere)
-	{-2.5f, 8.0f, 0.0f},  // Left arm (cylinder)
-	{2.5f, 8.0f, 0.0f},   // Right arm (cylinder)
-	{0.0f, 6.5f, 0.0f}    // Bottom part (cone)
+	{-0.625f, 8.0f, -0.375f},   // Main body (cube)
+	{0.625f, 8.0f, 0.5f},
+	{0.625f, 8.0f, -0.5f},
+	{-0.625f, 8.0f, -0.5f},
+	{-0.625f, 8.0f, 0.5f}
 };
 
 /// ::::::::::::::::::::::::::::::::::::::::::::::::CALLBACK FUNCIONS:::::::::::::::::::::::::::::::::::::::::::::::::://///
@@ -149,7 +154,7 @@ void renderSim(void) {
 
 	//Spotlight settings
 	renderer.setSpotLightMode(spotlight_mode);
-	renderer.setSpotParam(coneDir, 0.93);
+	renderer.setSpotParam(coneDir, 0.93f);
 
 	dataMesh data;
 	
@@ -175,8 +180,8 @@ void renderSim(void) {
 		for (int j=0; j<6; ++j) {
 			data.texMode = 0; //no texturing
 			mu.pushMatrix(gmu::MODEL);
-			mu.translate(gmu::MODEL, -6.0f + i * 6.0f, 0.0f, -6.0f + j * 6.0f);
-			mu.scale(gmu::MODEL, 3.0f, cubeHeights[i][j], 3.0f);
+			mu.translate(gmu::MODEL, -20.0f + i * 20.0f, 0.0f, -20.0f + j * 20.0f);
+			mu.scale(gmu::MODEL, 10.0f, cubeHeights[i][j], 10.0f);
 
 			mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
 			mu.computeNormalMatrix3x3();
@@ -192,6 +197,8 @@ void renderSim(void) {
 	}
 
 	
+	mu.pushMatrix(gmu::MODEL);
+	mu.translate(gmu::MODEL, -5.0f, 0.0f, -5.0f);
 	for (int i = 0; i < 5; i++) {
 		if (i==0) {
 			data.meshID = 0;
@@ -200,6 +207,24 @@ void renderSim(void) {
 		}
 		mu.pushMatrix(gmu::MODEL);
 		mu.translate(gmu::MODEL, drone_parts_position[i].x, drone_parts_position[i].y, drone_parts_position[i].z);
+		if (i == 0) {
+			mu.scale(gmu::MODEL, 1.25f, 0.15f, 0.75f);
+		} else if (i > 0 && i < 3) {
+			mu.scale(gmu::MODEL, 0.5f, 0.05f, 0.5f);
+		} else {
+			mu.scale(gmu::MODEL, 0.625f, 0.05f, 0.625f);
+		}
+
+		mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+		mu.computeNormalMatrix3x3();
+
+		data.texMode = 1;   //modulate diffuse color with texel color
+		data.vm = mu.get(gmu::VIEW_MODEL),
+		data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+		data.normal = mu.getNormalMatrix();
+		renderer.renderMesh(data);
+
+		mu.popMatrix(gmu::MODEL);
 	}
 
 	
@@ -548,7 +573,7 @@ int main(int argc, char **argv) {
 
 	for (int i = 0; i < 6; ++i) {
 		for (int j = 0; j < 6; ++j) {
-			cubeHeights[i][j] = 5.0f + 5.0f * (rand() / (float)RAND_MAX); // random between 5 and 10
+			cubeHeights[i][j] = 20.0f + 15.0f * (rand() / (float)RAND_MAX); // random between 5 and 10
 		}
 	}
 
