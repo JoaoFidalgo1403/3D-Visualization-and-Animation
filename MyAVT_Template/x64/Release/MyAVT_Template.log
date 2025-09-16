@@ -1,12 +1,12 @@
 ﻿  lightDemo.cpp
-C:\Users\tomas\OneDrive\Desktop\University\AVT\Lab_Assignment_1\AVT_Project\MyAVT_Template\lightDemo.cpp(350,107): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
-C:\Users\tomas\OneDrive\Desktop\University\AVT\Lab_Assignment_1\AVT_Project\MyAVT_Template\lightDemo.cpp(350,74): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
-C:\Users\tomas\OneDrive\Desktop\University\AVT\Lab_Assignment_1\AVT_Project\MyAVT_Template\lightDemo.cpp(350,57): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
-C:\Users\tomas\OneDrive\Desktop\University\AVT\Lab_Assignment_1\AVT_Project\MyAVT_Template\lightDemo.cpp(350,24): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(442,107): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(442,74): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(442,57): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(442,24): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
   Generating code
-  2 of 725 functions ( 0.3%) were compiled, the rest were copied from previous compilation.
+  4 of 782 functions ( 0.5%) were compiled, the rest were copied from previous compilation.
     0 functions were new in current compilation
-    9 functions had inline decision re-evaluated but remain unchanged
+    8 functions had inline decision re-evaluated but remain unchanged
   Finished generating code
-  MyAVT_Template.vcxproj -> C:\Users\tomas\OneDrive\Desktop\University\AVT\Lab_Assignment_1\AVT_Project\x64\Release\MyAVT_Template.exe
+  MyAVT_Template.vcxproj -> C:\Users\joaof\Desktop\AVT_Project\x64\Release\MyAVT_Template.exe
   0 File(s) copied

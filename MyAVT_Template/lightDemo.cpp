@@ -98,6 +98,19 @@ struct Drone {
 };
 Drone drone;
 
+struct Bird {
+    float pos[3];
+    float velocity[3];
+    float rotation; // degrees
+    float rotSpeed; // degrees/sec
+    Bird(float x, float y, float z, float vx, float vy, float vz, float rs)
+        : rotation(0.0f), rotSpeed(rs) {
+        pos[0] = x; pos[1] = y; pos[2] = z;
+        velocity[0] = vx; velocity[1] = vy; velocity[2] = vz;
+    }
+};
+std::vector<Bird> birds;
+
 /// ::::::::::::::::::::::::::::::::::::::::::::::::CALLBACK FUNCIONS:::::::::::::::::::::::::::::::::::::::::::::::::://///
 
 void timer(int value)
@@ -135,6 +148,55 @@ void changeSize(int w, int h) {
 	mu.perspective(53.13f, ratio, 0.1f, 1000.0f);
 }
 
+// -----------------------------------------------------------
+//
+// Update Birds State
+//
+
+
+// Initialize birds with random positions, velocities, and rotation speeds
+void initBirds(int numBirds) {
+    birds.clear();
+    for (int i = 0; i < numBirds; ++i) {
+        float x = -10.0f + 50.0f * (rand() / (float)RAND_MAX);
+        float y = 5.0f + 8.0f * (rand() / (float)RAND_MAX);
+        float z = -10.0f + 30.0f * (rand() / (float)RAND_MAX);
+        float vx = 10.0f * ((rand() / (float)RAND_MAX) - 0.5f);
+        float vy = 10.0f * ((rand() / (float)RAND_MAX) - 0.5f);
+        float vz = 10.0f * ((rand() / (float)RAND_MAX) - 0.5f);
+        float rotSpeed = 90.0f * ((rand() / (float)RAND_MAX) - 0.5f); // -30 to +30 deg/sec
+        birds.emplace_back(x, y, z, vx, vy, vz, rotSpeed);
+    }
+}
+
+// Update bird positions and rotations
+void updateBirds(float dt) {
+    const float minX = -10.0f, maxX = 40.0f;
+    const float minY = 5.0f,   maxY = 20.0f;
+    const float minZ = -10.0f, maxZ = 20.0f;
+
+    for (auto& b : birds) {
+        for (int i = 0; i < 3; ++i)
+            b.pos[i] += b.velocity[i] * dt;
+        b.rotation += b.rotSpeed * dt;
+        if (b.rotation > 360.0f) b.rotation -= 360.0f;
+        if (b.rotation < 0.0f) b.rotation += 360.0f;
+
+        // Bounce at boundaries
+        if (b.pos[0] < minX || b.pos[0] > maxX) {
+            b.velocity[0] *= -1;
+            b.pos[0] = std::max(std::min(b.pos[0], maxX), minX);
+        }
+        if (b.pos[1] < minY || b.pos[1] > maxY) {
+            b.velocity[1] *= -1;
+            b.pos[1] = std::max(std::min(b.pos[1], maxY), minY);
+        }
+        if (b.pos[2] < minZ || b.pos[2] > maxZ) {
+            b.velocity[2] *= -1;
+            b.pos[2] = std::max(std::min(b.pos[2], maxZ), minZ);
+        }
+    }
+}
 
 // ------------------------------------------------------------
 //
@@ -182,8 +244,26 @@ void updateDroneState(float dt) {
 
 // ------------------------------------------------------------
 //
-// Render stufff
+// Render stuff
 //
+
+void drawBirds(dataMesh& data) {
+    data.meshID = 2; // Sphere mesh
+    for (const auto& b : birds) {
+        mu.pushMatrix(gmu::MODEL);
+        mu.translate(gmu::MODEL, b.pos[0], b.pos[1], b.pos[2]);
+        mu.rotate(gmu::MODEL, b.rotation, 0, 1, 0); // Rotate around Y axis
+        mu.scale(gmu::MODEL, 0.2f, 0.2f, 0.2f); // Sphere size
+        mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+        mu.computeNormalMatrix3x3();
+        data.texMode = 0;
+        data.vm = mu.get(gmu::VIEW_MODEL),
+        data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+        data.normal = mu.getNormalMatrix();
+        renderer.renderMesh(data);
+        mu.popMatrix(gmu::MODEL);
+    }
+}
 
 void drawDrone(dataMesh &data) {
     mu.pushMatrix(gmu::MODEL);
@@ -295,6 +375,9 @@ void renderSim(void) {
 	data.meshID = 0; // For the cube (myMeshes[0])
 	for (int i=0; i<6; ++i) {  // Draw the other objects in the scene (myMeshes[0] to myMeshes[5])
 		for (int j=0; j<6; ++j) {
+
+			if (i == 3 && j == 4 || (i == 1 || i == 2) && j == 1) continue;
+
 			data.texMode = 0; //no texturing
 			mu.pushMatrix(gmu::MODEL);
 			mu.translate(gmu::MODEL, -20.0f + i * 20.0f, 0.0f, -20.0f + j * 20.0f);
@@ -312,6 +395,15 @@ void renderSim(void) {
 			mu.popMatrix(gmu::MODEL);
 		}
 	}
+
+	// Update and draw birds
+	static int lastBirdTime = glutGet(GLUT_ELAPSED_TIME);
+	int nowBird = glutGet(GLUT_ELAPSED_TIME);
+	float dtBird = (nowBird - lastBirdTime) * 0.001f;
+	lastBirdTime = nowBird;
+	updateBirds(dtBird);
+
+	drawBirds(data);
 
 	//Update Drone State
 	static int lastTime = glutGet(GLUT_ELAPSED_TIME);
@@ -490,6 +582,7 @@ void processMouseMotion(int xx, int yy)
 	camX = rAux * sin(alphaAux * 3.14f / 180.0f) * cos(betaAux * 3.14f / 180.0f);
 	camZ = rAux * cos(alphaAux * 3.14f / 180.0f) * cos(betaAux * 3.14f / 180.0f);
 	camY = rAux *   						       sin(betaAux * 3.14f / 180.0f);
+
 
 //  uncomment this if not using an idle or refresh func
 //	glutPostRedisplay();
@@ -699,6 +792,9 @@ int main(int argc, char **argv) {
 	if(!renderer.setRenderMeshesShaderProg("shaders/mesh.vert", "shaders/mesh.frag") || 
 		!renderer.setRenderTextShaderProg("shaders/ttf.vert", "shaders/ttf.frag"))
 	return(1);
+
+	// Initialize birds
+	initBirds(50); // Create 10 birds
 
 	//  GLUT main loop
 	glutMainLoop();
