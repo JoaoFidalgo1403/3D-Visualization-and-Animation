@@ -171,29 +171,77 @@ void initBirds(int numBirds) {
 
 // Update bird positions and rotations
 void updateBirds(float dt) {
-    const float minX = -10.0f, maxX = 40.0f;
-    const float minY = 5.0f,   maxY = 20.0f;
-    const float minZ = -10.0f, maxZ = 20.0f;
+    const float maxDistFromDrone = 25.0f; // radius around drone
+
+    // Speed multiplier after 30 seconds
+    int elapsedMs = glutGet(GLUT_ELAPSED_TIME);
+    float speedMultiplier = (elapsedMs > 30000) ? 2.0f : 1.0f;
 
     for (auto& b : birds) {
+        // Update position and rotation
         for (int i = 0; i < 3; ++i)
-            b.pos[i] += b.velocity[i] * dt;
+            b.pos[i] += b.velocity[i] * dt * speedMultiplier;
         b.rotation += b.rotSpeed * dt;
         if (b.rotation > 360.0f) b.rotation -= 360.0f;
         if (b.rotation < 0.0f) b.rotation += 360.0f;
 
-        // Bounce at boundaries
-        if (b.pos[0] < minX || b.pos[0] > maxX) {
-            b.velocity[0] *= -1;
-            b.pos[0] = std::max(std::min(b.pos[0], maxX), minX);
-        }
-        if (b.pos[1] < minY || b.pos[1] > maxY) {
-            b.velocity[1] *= -1;
-            b.pos[1] = std::max(std::min(b.pos[1], maxY), minY);
-        }
-        if (b.pos[2] < minZ || b.pos[2] > maxZ) {
-            b.velocity[2] *= -1;
-            b.pos[2] = std::max(std::min(b.pos[2], maxZ), minZ);
+        // If too far from drone, respawn at random position/direction on sphere surface
+        float dx = b.pos[0] - drone.pos[0];
+        float dy = b.pos[1] - drone.pos[1];
+        float dz = b.pos[2] - drone.pos[2];
+        float dist = sqrt(dx*dx + dy*dy + dz*dz);
+        if (dist > maxDistFromDrone) {
+            // Random point on sphere surface
+            float theta = 2.0f * 3.14159265f * (rand() / (float)RAND_MAX); // azimuthal angle
+            float phi = acos(2.0f * (rand() / (float)RAND_MAX) - 1.0f);    // polar angle
+            float r = maxDistFromDrone;
+            b.pos[0] = drone.pos[0] + r * sin(phi) * cos(theta);
+            b.pos[1] = drone.pos[1] + r * cos(phi);
+            b.pos[2] = drone.pos[2] + r * sin(phi) * sin(theta);
+
+            // Inward direction with random spread
+            float dir[3] = {
+                drone.pos[0] - b.pos[0],
+                drone.pos[1] - b.pos[1],
+                drone.pos[2] - b.pos[2]
+            };
+            // Normalize direction
+            float len = sqrt(dir[0]*dir[0] + dir[1]*dir[1] + dir[2]*dir[2]);
+            dir[0] /= len; dir[1] /= len; dir[2] /= len;
+
+            // Add random spread (angle up to ~30 degrees)
+            float spreadAngle = 0.5236f; // ~30 degrees in radians
+            float randAngle = (rand() / (float)RAND_MAX) * spreadAngle;
+            float randAxisTheta = 2.0f * 3.14159265f * (rand() / (float)RAND_MAX);
+
+            // Generate a random axis perpendicular to dir
+            float axis[3] = {
+                -dir[1], dir[0], 0
+            };
+            float axisLen = sqrt(axis[0]*axis[0] + axis[1]*axis[1] + axis[2]*axis[2]);
+            if (axisLen > 0.0001f) {
+                axis[0] /= axisLen; axis[1] /= axisLen; axis[2] /= axisLen;
+            } else {
+                axis[0] = 1; axis[1] = 0; axis[2] = 0;
+            }
+
+            // Rodrigues' rotation formula to rotate dir by randAngle around axis
+            float cosA = cos(randAngle);
+            float sinA = sin(randAngle);
+            float dot = dir[0]*axis[0] + dir[1]*axis[1] + dir[2]*axis[2];
+            float newDir[3];
+            newDir[0] = cosA * dir[0] + sinA * (axis[1]*dir[2] - axis[2]*dir[1]) + (1-cosA)*dot*axis[0];
+            newDir[1] = cosA * dir[1] + sinA * (axis[2]*dir[0] - axis[0]*dir[2]) + (1-cosA)*dot*axis[1];
+            newDir[2] = cosA * dir[2] + sinA * (axis[0]*dir[1] - axis[1]*dir[0]) + (1-cosA)*dot*axis[2];
+
+            // Final velocity
+            float speed = 10.0f;
+            b.velocity[0] = speed * newDir[0];
+            b.velocity[1] = speed * newDir[1];
+            b.velocity[2] = speed * newDir[2];
+
+            b.rotation = 0.0f;
+            b.rotSpeed = 90.0f * ((rand() / (float)RAND_MAX) - 0.5f);
         }
     }
 }
@@ -467,6 +515,15 @@ void processSpecialKeys(int key, int xx, int yy) {
 }
 
 
+void processKeysUp(unsigned char key, int xx, int yy)
+{
+	switch(key) {
+		case 'w': drone.throttle =  0.0f; break;
+		case 's': drone.throttle =  0.0f; break;
+	}
+}
+
+
 void processKeys(unsigned char key, int xx, int yy)
 {
     switch(key) {
@@ -598,6 +655,7 @@ void mouseWheel(int wheel, int direction, int x, int y) {
 	camX = r * sin(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
 	camZ = r * cos(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
 	camY = r *   						     sin(beta * 3.14f / 180.0f);
+
 
 //  uncomment this if not using an idle or refresh func
 //	glutPostRedisplay();
@@ -794,7 +852,7 @@ int main(int argc, char **argv) {
 	return(1);
 
 	// Initialize birds
-	initBirds(50); // Create 10 birds
+	initBirds(50); // Create 50 birds
 
 	//  GLUT main loop
 	glutMainLoop();
