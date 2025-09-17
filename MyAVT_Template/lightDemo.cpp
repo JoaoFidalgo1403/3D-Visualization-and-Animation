@@ -169,6 +169,8 @@ void initBirds(int numBirds) {
     }
 }
 
+// PUTO poe os passaros a darem spawn a 1a vez tambem no interior da esfera
+
 // Update bird positions and rotations
 void updateBirds(float dt) {
     const float maxDistFromDrone = 25.0f; // radius around drone
@@ -280,9 +282,11 @@ void updateDroneState(float dt) {
 	drone.dir[1] = cos(3.14159f / 2 * fabs(pitchRad / maxTiltRad)) * cos(3.14159f / 2 * fabs(rollRad / maxTiltRad));
 	drone.dir[2] = cos(yawRad) * (sin(rollRad) / sin(maxTiltRad)) + sin(yawRad) * (sin(pitchRad) / sin(maxTiltRad));
 
-	drone.velocity[0] = drone.throttle * drone.dir[0];
+	drone.velocity[0] = drone.throttle * drone.dir[0] + (1 + drone.throttle) * -drone.pitch;
 	drone.velocity[1] = drone.throttle * drone.dir[1];
-	drone.velocity[2] = drone.throttle * drone.dir[2];
+	drone.velocity[2] = drone.throttle * drone.dir[2] + (1 + drone.throttle) * drone.roll;
+
+	// Integrate position
 
 	drone.pos[0] += drone.velocity[0] * dt;
     drone.pos[1] += drone.velocity[1] * dt;
@@ -796,6 +800,8 @@ int main(int argc, char **argv) {
 	glutInitWindowSize(WinX, WinY);
 	WindowHandle = glutCreateWindow(CAPTION);
 
+
+
 //  Callback Registration
 	glutDisplayFunc(renderSim);
 	glutReshapeFunc(changeSize);
@@ -811,6 +817,7 @@ int main(int argc, char **argv) {
 	glutMouseWheelFunc ( mouseWheel ) ;
 
 	glutSpecialFunc(processSpecialKeys);
+	glutKeyboardUpFunc(processKeysUp);
 	
 
 //	return from main loop
