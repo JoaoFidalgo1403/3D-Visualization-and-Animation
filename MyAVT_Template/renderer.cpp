@@ -1,13 +1,8 @@
-//
-// The code comes with no warranties, use it at your own risk.
-// You may use it, or parts of it, wherever you want.
-// 
-// Author: João Madeiras Pereira
-//
 #include <iostream>
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <cstdio>
 #include "renderer.h"
 #include "mathUtility.h"
 #include "shader.h"
@@ -20,7 +15,20 @@
 
 using namespace std;
 
-Renderer::Renderer() {}
+Renderer::Renderer() {
+        // initialize all location arrays to -1
+    for (int i = 0; i < MAX_POINT_LIGHTS; ++i) {
+        point_position_loc[i] = point_ambient_loc[i] = point_diffuse_loc[i] = point_specular_loc[i] =
+        point_constant_loc[i] = point_linear_loc[i] = point_quadratic_loc[i] = -1;
+    }
+    for (int i = 0; i < MAX_SPOT_LIGHTS; ++i) {
+        spot_position_loc[i] = spot_direction_loc[i] = spot_cutoff_loc[i] = spot_outercutoff_loc[i] =
+        spot_ambient_loc[i] = spot_diffuse_loc[i] = spot_specular_loc[i] =
+        spot_constant_loc[i] = spot_linear_loc[i] = spot_quadratic_loc[i] = -1;
+    }
+    num_point_lights_loc = -1;
+    num_spot_lights_loc = -1;
+}
 
 bool Renderer::truetypeInit(const std::string& fontFile) {
 
@@ -153,6 +161,71 @@ bool Renderer::setRenderMeshesShaderProg(const std::string& vertShaderPath, cons
     tex_loc[1] = glGetUniformLocation(program, "texmap1");
     tex_loc[2] = glGetUniformLocation(program, "texmap2");
 
+    // --- query directional light uniforms ---
+    dir_direction_loc = glGetUniformLocation(program, "dirLight.direction");
+    dir_ambient_loc   = glGetUniformLocation(program, "dirLight.ambient");
+    dir_diffuse_loc   = glGetUniformLocation(program, "dirLight.diffuse");
+    dir_specular_loc  = glGetUniformLocation(program, "dirLight.specular");
+
+    // --- query point lights array uniforms ---
+    for (int i = 0; i < MAX_POINT_LIGHTS; ++i) {
+        std::ostringstream ss;
+        ss << "pointLights[" << i << "].position";
+        point_position_loc[i] = glGetUniformLocation(program, ss.str().c_str());
+        ss.str(""); ss.clear();
+        ss << "pointLights[" << i << "].ambient";
+        point_ambient_loc[i] = glGetUniformLocation(program, ss.str().c_str());
+        ss.str(""); ss.clear();
+        ss << "pointLights[" << i << "].diffuse";
+        point_diffuse_loc[i] = glGetUniformLocation(program, ss.str().c_str());
+        ss.str(""); ss.clear();
+        ss << "pointLights[" << i << "].specular";
+        point_specular_loc[i] = glGetUniformLocation(program, ss.str().c_str());
+        ss.str(""); ss.clear();
+        ss << "pointLights[" << i << "].constant";
+        point_constant_loc[i] = glGetUniformLocation(program, ss.str().c_str());
+        ss.str(""); ss.clear();
+        ss << "pointLights[" << i << "].linear";
+        point_linear_loc[i] = glGetUniformLocation(program, ss.str().c_str());
+        ss.str(""); ss.clear();
+        ss << "pointLights[" << i << "].quadratic";
+        point_quadratic_loc[i] = glGetUniformLocation(program, ss.str().c_str());
+    }
+
+    // --- query spot lights array uniforms ---
+    for (int i = 0; i < MAX_SPOT_LIGHTS; ++i) {
+        std::ostringstream ss;
+        ss << "spotLights[" << i << "].position";
+        spot_position_loc[i] = glGetUniformLocation(program, ss.str().c_str());
+        ss.str(""); ss.clear();
+        ss << "spotLights[" << i << "].direction";
+        spot_direction_loc[i] = glGetUniformLocation(program, ss.str().c_str());
+        ss.str(""); ss.clear();
+        ss << "spotLights[" << i << "].cutOff";
+        spot_cutoff_loc[i] = glGetUniformLocation(program, ss.str().c_str());
+        ss.str(""); ss.clear();
+        ss << "spotLights[" << i << "].outerCutOff";
+        spot_outercutoff_loc[i] = glGetUniformLocation(program, ss.str().c_str());
+        ss.str(""); ss.clear();
+        ss << "spotLights[" << i << "].ambient";
+        spot_ambient_loc[i] = glGetUniformLocation(program, ss.str().c_str());
+        ss.str(""); ss.clear();
+        ss << "spotLights[" << i << "].diffuse";
+        spot_diffuse_loc[i] = glGetUniformLocation(program, ss.str().c_str());
+        ss.str(""); ss.clear();
+        ss << "spotLights[" << i << "].specular";
+        spot_specular_loc[i] = glGetUniformLocation(program, ss.str().c_str());
+        ss.str(""); ss.clear();
+        ss << "spotLights[" << i << "].constant";
+        spot_constant_loc[i] = glGetUniformLocation(program, ss.str().c_str());
+        ss.str(""); ss.clear();
+        ss << "spotLights[" << i << "].linear";
+        spot_linear_loc[i] = glGetUniformLocation(program, ss.str().c_str());
+        ss.str(""); ss.clear();
+        ss << "spotLights[" << i << "].quadratic";
+        spot_quadratic_loc[i] = glGetUniformLocation(program, ss.str().c_str());
+    }
+
     return(shader.isProgramLinked() && shader.isProgramValid());
 }
 Renderer::~Renderer() {
@@ -216,6 +289,124 @@ void Renderer::setSpotLightMode(bool spotLightMode) {
 void Renderer::setLightPos(float* lightPos) {
     glUniform4fv(lpos_loc, 1, lightPos);
 }
+
+// helper
+static void safeNormalize3(float v[3]) {
+    float len = sqrtf(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+    if (len < 1e-6f) {
+        v[0] = 0.0f; v[1] = -1.0f; v[2] = 0.0f;
+    } else {
+        v[0] /= len; v[1] /= len; v[2] /= len;
+    }
+}
+
+void Renderer::setDirectionalLight(float* direction, float* ambient, float* diffuse, float* specular) {
+    // ensure the correct shader program is active
+    glUseProgram(program);
+
+    float dir[3] = { direction[0], direction[1], direction[2] };
+    safeNormalize3(dir);
+
+    if (dir_direction_loc >= 0) glUniform3fv(dir_direction_loc, 1, dir);
+    if (dir_ambient_loc   >= 0) glUniform3fv(dir_ambient_loc, 1, ambient);
+    if (dir_diffuse_loc   >= 0) glUniform3fv(dir_diffuse_loc, 1, diffuse);
+    if (dir_specular_loc  >= 0) glUniform3fv(dir_specular_loc, 1, specular);
+
+    if (num_point_lights_loc >= 0) glUniform1i(num_point_lights_loc, MAX_POINT_LIGHTS);
+    if (num_spot_lights_loc  >= 0) glUniform1i(num_spot_lights_loc,  MAX_SPOT_LIGHTS);
+}
+
+void Renderer::setDirectionalLight(float* direction) {
+    float amb[3] = {0.05f,0.05f,0.05f}, diff[3] = {0.4f,0.4f,0.4f}, spec[3] = {0.7f,0.7f,0.7f};
+    setDirectionalLight(direction, amb, diff, spec);
+}
+
+void Renderer::setPointLight(int idx, float* position, float* ambient, float* diffuse, float* specular,
+                             float constant, float linear, float quadratic) {
+    if (idx < 0 || idx >= MAX_POINT_LIGHTS) return;
+
+    glUseProgram(program);
+
+    if (point_position_loc[idx] >= 0) glUniform3fv(point_position_loc[idx], 1, position);
+    if (point_ambient_loc[idx]  >= 0) glUniform3fv(point_ambient_loc[idx], 1, ambient);
+    if (point_diffuse_loc[idx]  >= 0) glUniform3fv(point_diffuse_loc[idx], 1, diffuse);
+    if (point_specular_loc[idx] >= 0) glUniform3fv(point_specular_loc[idx], 1, specular);
+    if (point_constant_loc[idx] >= 0) glUniform1f(point_constant_loc[idx], constant);
+    if (point_linear_loc[idx]   >= 0) glUniform1f(point_linear_loc[idx], linear);
+    if (point_quadratic_loc[idx]>= 0) glUniform1f(point_quadratic_loc[idx], quadratic);
+
+    if (num_point_lights_loc >= 0) glUniform1i(num_point_lights_loc, MAX_POINT_LIGHTS);
+}
+
+void Renderer::setPointLight(int idx, float* position) {
+    float amb[3] = {0.02f,0.02f,0.02f}, diff[3] = {0.6f,0.5f,0.4f}, spec[3] = {0.5f,0.5f,0.5f};
+    setPointLight(idx, position, amb, diff, spec, 1.0f, 0.09f, 0.032f);
+}
+
+void Renderer::setSpotLight(int idx, float* position, float* direction,
+                            float cutOff, float outerCutOff,
+                            float* ambient, float* diffuse, float* specular,
+                            float constant, float linear, float quadratic) {
+    if (idx < 0 || idx >= MAX_SPOT_LIGHTS) return;
+
+    glUseProgram(program);
+
+    float dir[3] = { direction[0], direction[1], direction[2] };
+    safeNormalize3(dir);
+
+    if (spot_position_loc[idx] >= 0)     glUniform3fv(spot_position_loc[idx], 1, position);
+    if (spot_direction_loc[idx] >= 0)    glUniform3fv(spot_direction_loc[idx], 1, dir);
+    if (spot_cutoff_loc[idx] >= 0)       glUniform1f(spot_cutoff_loc[idx], cutOff);
+    if (spot_outercutoff_loc[idx] >= 0)  glUniform1f(spot_outercutoff_loc[idx], outerCutOff);
+    if (spot_ambient_loc[idx] >= 0)      glUniform3fv(spot_ambient_loc[idx], 1, ambient);
+    if (spot_diffuse_loc[idx] >= 0)      glUniform3fv(spot_diffuse_loc[idx], 1, diffuse);
+    if (spot_specular_loc[idx] >= 0)     glUniform3fv(spot_specular_loc[idx], 1, specular);
+    if (spot_constant_loc[idx] >= 0)     glUniform1f(spot_constant_loc[idx], constant);
+    if (spot_linear_loc[idx] >= 0)       glUniform1f(spot_linear_loc[idx], linear);
+    if (spot_quadratic_loc[idx] >= 0)    glUniform1f(spot_quadratic_loc[idx], quadratic);
+
+    if (num_spot_lights_loc >= 0) glUniform1i(num_spot_lights_loc, MAX_SPOT_LIGHTS);
+}
+
+// in renderer.cpp (include <cstdio> at top)
+void Renderer::cacheLightUniformLocations() {
+    // ensure the program is active when querying locations
+    glUseProgram(program);
+
+    dir_direction_loc = glGetUniformLocation(program, "dirLight.direction");
+    dir_ambient_loc   = glGetUniformLocation(program, "dirLight.ambient");
+    dir_diffuse_loc   = glGetUniformLocation(program, "dirLight.diffuse");
+    dir_specular_loc  = glGetUniformLocation(program, "dirLight.specular");
+
+    for (int i = 0; i < MAX_POINT_LIGHTS; ++i) {
+        char name[128];
+        snprintf(name, sizeof(name), "pointLights[%d].position", i); point_position_loc[i] = glGetUniformLocation(program, name);
+        snprintf(name, sizeof(name), "pointLights[%d].ambient", i);  point_ambient_loc[i]  = glGetUniformLocation(program, name);
+        snprintf(name, sizeof(name), "pointLights[%d].diffuse", i);  point_diffuse_loc[i]  = glGetUniformLocation(program, name);
+        snprintf(name, sizeof(name), "pointLights[%d].specular", i); point_specular_loc[i] = glGetUniformLocation(program, name);
+        snprintf(name, sizeof(name), "pointLights[%d].constant", i); point_constant_loc[i] = glGetUniformLocation(program, name);
+        snprintf(name, sizeof(name), "pointLights[%d].linear", i);   point_linear_loc[i]   = glGetUniformLocation(program, name);
+        snprintf(name, sizeof(name), "pointLights[%d].quadratic", i);point_quadratic_loc[i]= glGetUniformLocation(program, name);
+    }
+
+    for (int i = 0; i < MAX_SPOT_LIGHTS; ++i) {
+        char name[128];
+        snprintf(name, sizeof(name), "spotLights[%d].position", i);        spot_position_loc[i]     = glGetUniformLocation(program, name);
+        snprintf(name, sizeof(name), "spotLights[%d].direction", i);       spot_direction_loc[i]    = glGetUniformLocation(program, name);
+        snprintf(name, sizeof(name), "spotLights[%d].cutOff", i);          spot_cutoff_loc[i]       = glGetUniformLocation(program, name);
+        snprintf(name, sizeof(name), "spotLights[%d].outerCutOff", i);     spot_outercutoff_loc[i]  = glGetUniformLocation(program, name);
+        snprintf(name, sizeof(name), "spotLights[%d].ambient", i);         spot_ambient_loc[i]      = glGetUniformLocation(program, name);
+        snprintf(name, sizeof(name), "spotLights[%d].diffuse", i);         spot_diffuse_loc[i]      = glGetUniformLocation(program, name);
+        snprintf(name, sizeof(name), "spotLights[%d].specular", i);        spot_specular_loc[i]     = glGetUniformLocation(program, name);
+        snprintf(name, sizeof(name), "spotLights[%d].constant", i);        spot_constant_loc[i]     = glGetUniformLocation(program, name);
+        snprintf(name, sizeof(name), "spotLights[%d].linear", i);          spot_linear_loc[i]       = glGetUniformLocation(program, name);
+        snprintf(name, sizeof(name), "spotLights[%d].quadratic", i);       spot_quadratic_loc[i]    = glGetUniformLocation(program, name);
+    }
+
+    num_point_lights_loc = glGetUniformLocation(program, "numPointLights");
+    num_spot_lights_loc  = glGetUniformLocation(program, "numSpotLights");
+}
+
 
 void Renderer::setTexUnit(int tuId, int texObjId) {
     glActiveTexture(GL_TEXTURE0 + tuId);

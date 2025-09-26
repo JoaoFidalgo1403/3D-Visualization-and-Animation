@@ -1,11 +1,11 @@
-//
-// The code comes with no warranties, use it at your own risk.
-// You may use it, or parts of it, wherever you want.
-// 
-// Author: João Madeiras Pereira
-//
+// renderer.h
+// Updated: cache and robust set* functions for struct-based lights
+
+#pragma once
 
 #include <vector>
+#include <string>
+#include <GL/glew.h>
 #include "texture.h"
 #include "model.h"
 #include "stb_truetype.h"
@@ -43,7 +43,9 @@ public:
   //Setup render meshes GLSL program
   bool setRenderMeshesShaderProg(const std::string &vertShaderPath, const std::string &fragShaderPath);
 
-    // setup text font rasterizer GLSL program
+  void cacheLightUniformLocations();
+
+  // setup text font rasterizer GLSL program
   bool setRenderTextShaderProg(const std::string &vertShaderPath, const std::string &fragShaderPath);
 
   void activateRenderMeshesShaderProg();
@@ -58,6 +60,22 @@ public:
 
   void setSpotLightMode(bool spotLightMode);
 
+  static const int MAX_POINT_LIGHTS = 6;
+  static const int MAX_SPOT_LIGHTS = 4;
+
+  void setDirectionalLight(float* direction, float* ambient, float* diffuse, float* specular);
+
+  void setPointLight(int idx, float* position, float* ambient, float* diffuse, float* specular,
+                    float constant, float linear, float quadratic);
+  
+  void setPointLight(int idx, float* position); // uses default material & attenuation
+
+  void setSpotLight(int idx, float* position, float* direction, float cutOff, float outerCutOff,
+                    float* ambient, float* diffuse, float* specular, float constant, float linear,
+                     float quadratic);
+
+  void setDirectionalLight(float* direction); // uses default ambient/diffuse/specular
+
   void setTexUnit(int tuId, int texObjId);
 
 
@@ -65,7 +83,7 @@ public:
   //Vector with meshes
   std::vector<struct MyMesh> myMeshes;
 
-  /// Object of class Texture that manage an array of Texture Objects 
+  /// Object of class Texture that manage an array of Texture Objects
   Texture TexObjArray;
 
 private:
@@ -78,6 +96,34 @@ private:
 
   GLint pvm_loc, vm_loc, normal_loc, lpos_loc, texMode_loc;
   GLint tex_loc[MAX_TEXTURES];
+  
+  // Directional light uniform locations
+  GLint dir_direction_loc = -1, dir_ambient_loc = -1, dir_diffuse_loc = -1, dir_specular_loc = -1;
+
+  // Point lights uniform locations (arrays)
+  GLint point_position_loc[MAX_POINT_LIGHTS];
+  GLint point_ambient_loc[MAX_POINT_LIGHTS];
+  GLint point_diffuse_loc[MAX_POINT_LIGHTS];
+  GLint point_specular_loc[MAX_POINT_LIGHTS];
+  GLint point_constant_loc[MAX_POINT_LIGHTS];
+  GLint point_linear_loc[MAX_POINT_LIGHTS];
+  GLint point_quadratic_loc[MAX_POINT_LIGHTS];
+
+  // Spot lights uniform locations (arrays)
+  GLint spot_position_loc[MAX_SPOT_LIGHTS];
+  GLint spot_direction_loc[MAX_SPOT_LIGHTS];
+  GLint spot_cutoff_loc[MAX_SPOT_LIGHTS];
+  GLint spot_outercutoff_loc[MAX_SPOT_LIGHTS];
+  GLint spot_ambient_loc[MAX_SPOT_LIGHTS];
+  GLint spot_diffuse_loc[MAX_SPOT_LIGHTS];
+  GLint spot_specular_loc[MAX_SPOT_LIGHTS];
+  GLint spot_constant_loc[MAX_SPOT_LIGHTS];
+  GLint spot_linear_loc[MAX_SPOT_LIGHTS];
+  GLint spot_quadratic_loc[MAX_SPOT_LIGHTS];
+
+  // global count uniform locations (optional)
+  GLint num_point_lights_loc = -1;
+  GLint num_spot_lights_loc  = -1;
 
   //render font GLSL program variable locations and VAO
   GLint fontPvm_loc, textColor_loc;

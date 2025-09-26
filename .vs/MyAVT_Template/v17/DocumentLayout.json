@@ -3,12 +3,16 @@
   "WorkspaceRootPath": "C:\\Users\\joaof\\Desktop\\AVT_Project\\",
   "Documents": [
     {
+      "AbsoluteMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\renderer.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|solutionrelative:MyAVT_Template\\renderer.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\lightDemo.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
       "RelativeMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|solutionrelative:MyAVT_Template\\lightDemo.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\renderer.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
-      "RelativeMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|solutionrelative:MyAVT_Template\\renderer.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+      "AbsoluteMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\renderer.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|solutionrelative:MyAVT_Template\\renderer.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\stb_rect_pack.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
@@ -33,10 +37,6 @@
     {
       "AbsoluteMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\shader.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
       "RelativeMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|solutionrelative:MyAVT_Template\\shader.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\renderer.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
-      "RelativeMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|solutionrelative:MyAVT_Template\\renderer.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\MyAVT_Template.vcxproj.user||{FA3CD31E-987B-443A-9B81-186104E8DAC1}",
@@ -77,7 +77,20 @@
           "Children": [
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 1,
+              "Title": "lightDemo.cpp",
+              "DocumentMoniker": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\lightDemo.cpp",
+              "RelativeDocumentMoniker": "MyAVT_Template\\lightDemo.cpp",
+              "ToolTip": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\lightDemo.cpp",
+              "RelativeToolTip": "MyAVT_Template\\lightDemo.cpp",
+              "ViewState": "AgIAAO8DAAAAAAAAAAAAAAQEAAAIAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
+              "WhenOpened": "2025-09-16T15:09:02.708Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
               "Title": "stb_rect_pack.h",
               "DocumentMoniker": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\stb_rect_pack.h",
               "RelativeDocumentMoniker": "MyAVT_Template\\stb_rect_pack.h",
@@ -89,7 +102,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 7,
+              "DocumentIndex": 8,
               "Title": "shader.cpp",
               "DocumentMoniker": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\shader.cpp",
               "RelativeDocumentMoniker": "MyAVT_Template\\shader.cpp",
@@ -101,44 +114,32 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 8,
+              "DocumentIndex": 2,
               "Title": "renderer.h",
               "DocumentMoniker": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\renderer.h",
               "RelativeDocumentMoniker": "MyAVT_Template\\renderer.h",
               "ToolTip": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\renderer.h",
               "RelativeToolTip": "MyAVT_Template\\renderer.h",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAABYAAAAAAAAAAAAcwCUAAAANAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
               "WhenOpened": "2025-09-16T15:09:17.53Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 0,
               "Title": "renderer.cpp",
               "DocumentMoniker": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\renderer.cpp",
               "RelativeDocumentMoniker": "MyAVT_Template\\renderer.cpp",
               "ToolTip": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\renderer.cpp",
               "RelativeToolTip": "MyAVT_Template\\renderer.cpp",
-              "ViewState": "AgIAALoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAADcBAAAAAAAAAAAiwDsBAABWAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-09-16T15:09:17.362Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 0,
-              "Title": "lightDemo.cpp",
-              "DocumentMoniker": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\lightDemo.cpp",
-              "RelativeDocumentMoniker": "MyAVT_Template\\lightDemo.cpp",
-              "ToolTip": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\lightDemo.cpp",
-              "RelativeToolTip": "MyAVT_Template\\lightDemo.cpp",
-              "ViewState": "AgIAAKAAAAAAAAAAAAAMwJwAAAAUAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-09-16T15:09:02.708Z",
+              "WhenOpened": "2025-09-16T15:09:17.362Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 5,
               "Title": "stb_truetype.h",
               "DocumentMoniker": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\stb_truetype.h",
               "RelativeDocumentMoniker": "MyAVT_Template\\stb_truetype.h",
@@ -150,7 +151,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 4,
               "Title": "texture.cpp",
               "DocumentMoniker": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\texture.cpp",
               "RelativeDocumentMoniker": "MyAVT_Template\\texture.cpp",
@@ -162,7 +163,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 5,
+              "DocumentIndex": 6,
               "Title": "texture.h",
               "DocumentMoniker": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\texture.h",
               "RelativeDocumentMoniker": "MyAVT_Template\\texture.h",
@@ -186,7 +187,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 6,
+              "DocumentIndex": 7,
               "Title": "shader.h",
               "DocumentMoniker": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\shader.h",
               "RelativeDocumentMoniker": "MyAVT_Template\\shader.h",

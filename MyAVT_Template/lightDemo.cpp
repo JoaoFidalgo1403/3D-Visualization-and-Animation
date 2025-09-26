@@ -27,6 +27,7 @@
 #include "mathUtility.h"
 #include "model.h"
 #include "texture.h"
+#include <algorithm>
 
 using namespace std;
 
@@ -64,7 +65,38 @@ long myTime,timebase = 0,frame = 0;
 char s[32];
 
 float lightPos[4] = {4.0f, 15.0f, 2.0f, 1.0f};
-//float lightPos[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+
+// Directional light
+float dirLightDir[4] = { -0.2f, -1.0f, -0.3f, 0.0f }; // w=0 for direction
+
+// -- Light counts (single place to change) --
+#define NUM_POINT_LIGHTS 6
+#define NUM_SPOT_LIGHTS  2
+
+// Runtime constants (use these when an `int` is required)
+const int kNumPointLights = NUM_POINT_LIGHTS;
+const int kNumSpotLights  = NUM_SPOT_LIGHTS;
+
+// Point lights
+float pointLightPos[NUM_POINT_LIGHTS][4] = {
+    { 5.0f,  5.0f,  5.0f, 1.0f },
+    {-5.0f,  5.0f,  5.0f, 1.0f },
+    { 5.0f,  5.0f, -5.0f, 1.0f },
+    {-5.0f,  5.0f, -5.0f, 1.0f },
+    { 0.0f, 10.0f,  0.0f, 1.0f },
+    { 0.0f,  2.0f,  5.0f, 1.0f }
+};
+
+// Spotlights
+float spotLightPos[NUM_SPOT_LIGHTS][4] = {
+    { 0.0f, 10.0f, 0.0f, 1.0f },
+    { 5.0f, 10.0f, 5.0f, 1.0f }
+};
+float spotLightDir[NUM_SPOT_LIGHTS][3] = {
+    { 0.0f, -1.0f, 0.0f },
+    { -1.0f, -1.0f, 0.0f }
+};
+
 
 //Spotlight
 bool spotlight_mode = false;
@@ -255,7 +287,7 @@ void updateBirds(float dt) {
 
 void updateDroneState(float dt) {
 	// Parameters (tweak to taste)
-    const float maxThrottle = 10.0f;   // upward accel when throttleCmd == 1
+    const float maxThrottle = 15.0f;   // upward accel when throttleCmd == 1
     const float maxTilt = 45.0f;            // degrees: maximum pitch/roll allowed
 	
 	// Limits
@@ -282,9 +314,9 @@ void updateDroneState(float dt) {
 	drone.dir[1] = cos(3.14159f / 2 * fabs(pitchRad / maxTiltRad)) * cos(3.14159f / 2 * fabs(rollRad / maxTiltRad));
 	drone.dir[2] = cos(yawRad) * (sin(rollRad) / sin(maxTiltRad)) + sin(yawRad) * (sin(pitchRad) / sin(maxTiltRad));
 
-	drone.velocity[0] = drone.throttle * drone.dir[0] + (1 + drone.throttle) * -drone.pitch;
+	drone.velocity[0] = (10 + drone.throttle) * drone.dir[0];
 	drone.velocity[1] = drone.throttle * drone.dir[1];
-	drone.velocity[2] = drone.throttle * drone.dir[2] + (1 + drone.throttle) * drone.roll;
+	drone.velocity[2] = (10 + drone.throttle) * drone.dir[2];
 
 	// Integrate position
 
@@ -353,13 +385,69 @@ void drawDrone(dataMesh &data) {
 	}
 }
 
+// Place point lights at the top of the N tallest buildings
+void updatePointLightsFromBuildings()
+{
+    struct B { int i, j; float h; float x, z; };
+    std::vector<B> list;
+    list.reserve(6*6);
+
+    // Grid origin & spacing must match the transforms you use when drawing the cubes:
+    // translate(..., -20.0f + i * 20.0f, 0.0f, -20.0f + j * 20.0f);
+    const float gridOriginX = -20.0f;
+    const float gridOriginZ = -20.0f;
+    const float gridSpacing   = 20.0f;
+
+	// These are the per-cube scale values you use when drawing:
+    const float cubeWidth  = 10.0f; // scale X
+    const float cubeDepth  = 10.0f; // scale Z
+
+    // Build list of all buildings (i = 0..5, j = 0..5)
+    for (int i = 0; i < 6; ++i) {
+        for (int j = 0; j < 6; ++j) {
+			if (i == 3 && j == 4 || (i == 1 || i == 2) && j == 1) continue;
+
+            float h = cubeHeights[i][j];
+            float x = gridOriginX + i * gridSpacing;
+            float z = gridOriginZ + j * gridSpacing;
+            list.push_back({i, j, h, x, z});
+        }
+    }
+
+    // sort descending by height
+    std::sort(list.begin(), list.end(), [](const B &a, const B &b){
+        return a.h > b.h;
+    });
+
+    // How much above the roof to place the light (tweakable)
+    const float roofOffset = 1.0f;
+
+    // If your cube mesh's base is at y=0 instead, use y = h + roofOffset.
+    for (int k = 0; k < NUM_POINT_LIGHTS; ++k) {
+        if (k < (int)list.size()) {
+            const B &b = list[k];
+            float topY = b.h + roofOffset;   // <-- change to (b.h + roofOffset) if base-at-0
+            pointLightPos[k][0] = b.x + cubeWidth / 2.0f; // center of cube in X
+            pointLightPos[k][1] = topY;
+            pointLightPos[k][2] = b.z + cubeDepth / 2.0f; // center of cube in Z
+            pointLightPos[k][3] = 1.0f;
+        } else {
+            // fallback: turn off remaining lights by placing far away / at ground
+            pointLightPos[k][0] = 0.0f;
+            pointLightPos[k][1] = -10000.0f;
+            pointLightPos[k][2] = 0.0f;
+            pointLightPos[k][3] = 1.0f;
+        }
+    }
+}
+
 void renderSim(void) {
 
 	FrameCount++;
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	renderer.activateRenderMeshesShaderProg(); // use the required GLSL program to draw the meshes with illumination
-
+	
 	//Associar os Texture Units aos Objects Texture
 	//stone.tga loaded in TU0; checker.tga loaded in TU1;  lightwood.tga loaded in TU2
 	renderer.setTexUnit(0, 0);
@@ -375,6 +463,8 @@ void renderSim(void) {
 			mu.lookAt(drone.pos[0] + camX, drone.pos[1] + camY,  drone.pos[2] + camZ, 
 					  drone.pos[0] + 1.0f, drone.pos[1] + 0.25f, drone.pos[2] + 1.0f, 
 					  0, 1, 0);
+			mu.loadIdentity(gmu::PROJECTION);
+			mu.perspective(53.13f, (1.0f * WinX) / WinY, 0.1f, 1000.0f);
 			break;
 		case TOP_ORTHO:
 			mu.lookAt(0, 50, 0, 
@@ -399,6 +489,91 @@ void renderSim(void) {
 	float lposAux[4];
 	mu.multMatrixPoint(gmu::VIEW, lightPos, lposAux);   //lightPos definido em World Coord so is converted to eye space
 	renderer.setLightPos(lposAux);
+
+	// --- Directional light ---
+	// dirLightDir is a direction (w = 0.0f). Use multMatrixPoint with w==0 to transform vectors
+	float dirEye4[4] = { dirLightDir[0], dirLightDir[1], dirLightDir[2], dirLightDir[3] };
+	float dAux[4];
+	mu.multMatrixPoint(gmu::VIEW, dirEye4, dAux); // transforms ignoring translation because w==0
+
+	// prepare 3-component arrays for the renderer API
+	float dirEye3[3] = { dAux[0], dAux[1], dAux[2] };
+	float dirAmb[3]  = { 0.05f, 0.05f, 0.05f };
+	float dirDiff[3] = { 0.40f, 0.40f, 0.40f };
+	float dirSpec[3] = { 0.70f, 0.70f, 0.70f };
+
+	// Query currently bound program (safe even if renderer hides program id)
+	GLint prog = 0;
+	glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
+
+	// Query some key uniform locations used by the new shader
+	GLint loc_dir = glGetUniformLocation(prog, "dirLight.direction");
+	GLint loc_numP = glGetUniformLocation(prog, "numPointLights");
+	GLint loc_numS = glGetUniformLocation(prog, "numSpotLights");
+
+	// If the shader is active and locations valid, set them explicitly as a fallback
+	if (prog != 0) {
+		if (loc_dir >= 0) {
+			glUniform3fv(loc_dir, 1, dirEye3);
+		}
+
+		// ensure shader knows how many point/spot lights we plan to use
+		if (loc_numP >= 0) glUniform1i(loc_numP, kNumPointLights); // your scene uses 6 point lights
+		if (loc_numS >= 0) glUniform1i(loc_numS, kNumSpotLights); // you created 2 spot lights
+	}
+
+	// ensure shader program active (you already call activateRenderMeshesShaderProg() above)
+	renderer.setDirectionalLight(dirEye3, dirAmb, dirDiff, dirSpec);
+
+	// --- Point lights ---
+	for (int i = 0; i < NUM_POINT_LIGHTS; i++) {
+	    float pAux4[4];
+	    mu.multMatrixPoint(gmu::VIEW, pointLightPos[i], pAux4); // world->eye
+	    float pEye3[3] = { pAux4[0], pAux4[1], pAux4[2] };
+
+		float intensity = 3.0f;
+
+	    float pAmb[3]  = { 0.02f, 0.02f, 0.02f };
+	    float pDiff[3] = { 0.60f * intensity, 0.50f * intensity, 0.40f * intensity};
+	    float pSpec[3] = { 0.50f * intensity, 0.50f * intensity, 0.50f * intensity};
+
+	    // attenuation constants (example)
+	    float constant  = 1.0f;
+	    float linear    = 0.09f;
+	    float quadratic = 0.032f;
+		
+	    renderer.setPointLight(i, pEye3, pAmb, pDiff, pSpec, constant, linear, quadratic);
+	}
+
+	// --- Spotlights ---
+	for (int i = 0; i < NUM_SPOT_LIGHTS; i++) {
+	    float sAux4[4];
+	    mu.multMatrixPoint(gmu::VIEW, spotLightPos[i], sAux4); // world->eye
+	    float sPos3[3] = { sAux4[0], sAux4[1], sAux4[2] };
+
+	    // spot direction is already a 3-float array in world space; transform it as a vector (w=0)
+	    float sDirWorld4[4] = { spotLightDir[i][0], spotLightDir[i][1], spotLightDir[i][2], 0.0f };
+	    float sDirEye4[4];
+	    mu.multMatrixPoint(gmu::VIEW, sDirWorld4, sDirEye4);
+	    float sDir3[3] = { sDirEye4[0], sDirEye4[1], sDirEye4[2] };
+
+	    float sAmb[3]  = { 0.0f, 0.0f, 0.0f };
+	    float sDiff[3] = { 1.0f, 1.0f, 1.0f };
+	    float sSpec[3] = { 0.8f, 0.8f, 0.8f };
+
+	    // spot cutoffs (use cos of angle). Example: inner=12.5deg outer=17.5deg
+	    const float PI = 3.14159265f;
+	    float innerCutDeg = 12.5f, outerCutDeg = 17.5f;
+	    float innerCutCos = cosf(innerCutDeg * PI / 180.0f);
+	    float outerCutCos = cosf(outerCutDeg * PI / 180.0f);
+
+	    // attenuation (same as point lights or tweak)
+	    float sConstant  = 1.0f;
+	    float sLinear    = 0.09f;
+	    float sQuadratic = 0.032f;
+
+	    renderer.setSpotLight(i, sPos3, sDir3, innerCutCos, outerCutCos, sAmb, sDiff, sSpec, sConstant, sLinear, sQuadratic);
+	}
 
 	//Spotlight settings
 	renderer.setSpotLightMode(spotlight_mode);
@@ -604,6 +779,21 @@ void processMouseButtons(int button, int state, int xx, int yy)
 		tracking = 0;
 	}
 }
+///////////////////////////////////////////////////////////////////////
+// Print point lights (world coords) and drone world position
+void printPointLightsAndDrone()
+{
+    printf("=== Scene positions (world coords) ===\n");
+    printf("Drone pos: (%.3f, %.3f, %.3f)\n",
+           drone.pos[0], drone.pos[1], drone.pos[2]);
+
+    for (int i = 0; i < NUM_POINT_LIGHTS; ++i) {
+        printf("PointLight[%d] world pos: (%.3f, %.3f, %.3f)\n",
+               i, pointLightPos[i][0], pointLightPos[i][1], pointLightPos[i][2]);
+    }
+    fflush(stdout);
+}
+///////////////////////////////////////////////////////////////////////
 
 // Track mouse motion while buttons are pressed
 
@@ -854,9 +1044,15 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	updatePointLightsFromBuildings();
+	printPointLightsAndDrone(); // print initial positions for debugging
+
 	if(!renderer.setRenderMeshesShaderProg("shaders/mesh.vert", "shaders/mesh.frag") || 
 		!renderer.setRenderTextShaderProg("shaders/ttf.vert", "shaders/ttf.frag"))
 	return(1);
+
+	// after successful creation/link of the mesh program:
+	//renderer.cacheLightUniformLocations();
 
 	// Initialize birds
 	initBirds(50); // Create 50 birds
