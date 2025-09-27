@@ -585,7 +585,8 @@ void renderSim(void) {
 	// If the shader is active and locations valid, set them explicitly as a fallback
 	if (prog != 0) {
 		if (loc_dir >= 0) {
-			glUniform3fv(loc_dir, 1, dirEye3);
+			float sunDir[3] = { -0.7f, -0.2f, -0.7f };
+			glUniform3fv(loc_dir, 1, sunDir);
 		}
 
 		// ensure shader knows how many point/spot lights we plan to use
@@ -648,11 +649,6 @@ void renderSim(void) {
 	    renderer.setSpotLight(i, sPos3, sDir3, innerCutCos, outerCutCos, sAmb, sDiff, sSpec, sConstant, sLinear, sQuadratic);
 	}
 
-	//Spotlight settings
-	renderer.setSpotLightMode(spotlight_mode);
-	renderer.setSpotParam(coneDir, 0.93f);
-
-	
 	// Draw the terrain - myMeshes[6] contains the Quad object
 	mu.pushMatrix(gmu::MODEL);
 	mu.translate(gmu::MODEL, 0.0f, -1.15f, 0.0f);
