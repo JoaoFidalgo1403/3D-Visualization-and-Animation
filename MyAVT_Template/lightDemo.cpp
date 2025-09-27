@@ -53,9 +53,26 @@ float camX, camY, camZ;
 float alpha = 57.0f, beta = 18.0f;
 float r = 45.0f;
 
+
 // Camera modes
-enum CameraMode { FOLLOW, TOP_ORTHO, TOP_PERSPECTIVE};
-CameraMode cameraMode = FOLLOW;
+enum CameraMode { FOLLOW, THIRD, TOP_ORTHO, TOP_PERSPECTIVE };
+CameraMode cameraMode = THIRD;
+
+// Third-person/orbit camera parameters (tweak to taste)
+float camOrbitRadius    = 15.0f;   // distance from drone
+float camOrbitHeight    = 6.0f;    // vertical offset above drone
+float camOrbitSpeed     = 0.8f;    // radians per second (positive = orbit CCW)
+float camOrbitAngle     = 3.14159265f;    // current angle (radians)
+float camOrbitLookHeight = 1.5f;   // where camera looks relative to drone.y
+bool camOrbitFollowYaw = true; // camera rotates with drone yaw (child-like)
+
+// Orbit control
+bool camOrbitAuto = false;         // if true, orbit auto-rotates; we want mouse control, so default false
+const float CAM_ORBIT_SENSITIVITY_X = -0.01f; // radians per pixel horizontal
+const float CAM_ORBIT_SENSITIVITY_Y = 0.05f; // world units per pixel vertical
+const float CAM_ORBIT_MIN_HEIGHT = 1.0f;
+const float CAM_ORBIT_MAX_HEIGHT = 80.0f;
+
 
 // Mouse Tracking Variables
 int startX, startY, tracking = 0;
@@ -293,7 +310,7 @@ void updateBirds(float dt) {
 void updateDroneState(float dt) {
 	// Parameters (tweak to taste)
     const float maxThrottle = 15.0f;   // upward accel when throttleCmd == 1
-    const float maxTilt = 45.0f;            // degrees: maximum pitch/roll allowed
+    const float maxTilt = 46.0f;            // degrees: maximum pitch/roll allowed
 	
 	// Limits
 	if (drone.yaw > 360.0f || drone.yaw < -360.0f) drone.yaw = 0.0f;
@@ -447,8 +464,14 @@ void updatePointLightsFromBuildings()
 }
 
 void renderSim(void) {
-
 	FrameCount++;
+
+	// frame delta time for camera updates
+	static int lastFrameTime = glutGet(GLUT_ELAPSED_TIME);
+	int nowFrame = glutGet(GLUT_ELAPSED_TIME);
+	float frameDt = (nowFrame - lastFrameTime) * 0.001f; // seconds
+	lastFrameTime = nowFrame;
+
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	renderer.activateRenderMeshesShaderProg(); // use the required GLSL program to draw the meshes with illumination
@@ -471,6 +494,49 @@ void renderSim(void) {
 			mu.loadIdentity(gmu::PROJECTION);
 			mu.perspective(53.13f, (1.0f * WinX) / WinY, 0.1f, 1000.0f);
 			break;
+		case THIRD:
+		{
+			// optionally advance orbit angle (only if auto is enabled)
+			if (camOrbitAuto) {
+				camOrbitAngle += camOrbitSpeed * frameDt;
+				const float TWO_PI = 6.28318530718f;
+				if (camOrbitAngle >= TWO_PI) camOrbitAngle -= TWO_PI;
+				if (camOrbitAngle < 0.0f) camOrbitAngle += TWO_PI;
+			}
+
+			// Compose final orbit angle as: drone yaw (in radians) + user offset (camOrbitAngle)
+			const float DEG2RAD = 3.14159265f / 180.0f;
+			float yawRad = drone.yaw * DEG2RAD;
+			// inside THIRD case, before computing finalAngle
+			static float smoothYaw = 0.0f;
+			const float smoothFactor = 0.08f; // larger = snappier, smaller = smoother
+			smoothYaw = smoothYaw + (yawRad - smoothYaw) * smoothFactor;
+			float finalAngle = camOrbitAngle - (camOrbitFollowYaw ? smoothYaw : 0.0f);
+
+			// compute camera offset in drone-local world coords (orbit around Y)
+			float ox = camOrbitRadius * cosf(finalAngle);
+			float oz = camOrbitRadius * sinf(finalAngle);
+
+			// world-space camera position = drone position + offset
+			float camWorldX = drone.pos[0] + ox;
+			float camWorldY = drone.pos[1] + camOrbitHeight;
+			float camWorldZ = drone.pos[2] + oz;
+
+			// where to look: the drone's position (selfie style)
+			float lookX = drone.pos[0];
+			float lookY = drone.pos[1] + camOrbitLookHeight;
+			float lookZ = drone.pos[2];
+
+			mu.lookAt(camWorldX, camWorldY, camWorldZ,
+					lookX, lookY, lookZ,
+					0, 1, 0);
+
+			mu.loadIdentity(gmu::PROJECTION);
+			mu.perspective(53.13f, (1.0f * WinX) / WinY, 0.1f, 1000.0f);
+		}
+		break;
+
+
 		case TOP_ORTHO:
 			mu.lookAt(0, 50, 0, 
 					  0, 0,  0, 
@@ -737,9 +803,10 @@ void processKeys(unsigned char key, int xx, int yy)
         case 'm': glEnable(GL_MULTISAMPLE); break;
         case 'n': glDisable(GL_MULTISAMPLE); break;
 
-        case '1': cameraMode = TOP_ORTHO; printf("Camera mode: TOP ORTHO\n"); break;
-        case '2': cameraMode = TOP_PERSPECTIVE; printf("Camera mode: TOP PERSPECTIVE\n"); break;
-        case '3': cameraMode = FOLLOW; printf("Camera mode: FOLLOW\n"); break;
+		case '1': cameraMode = THIRD; printf("Camera mode: THIRD PERSON ORBIT\n"); break;
+        case '2': cameraMode = TOP_ORTHO; printf("Camera mode: TOP ORTHO\n"); break;
+        case '3': cameraMode = TOP_PERSPECTIVE; printf("Camera mode: TOP PERSPECTIVE\n"); break;
+        case '4': cameraMode = FOLLOW; printf("Camera mode: FOLLOW\n"); break;
 
         // throttle: set command so updateDroneState integrates throttle
         case 'w': drone.throttle +=  1.0f; break;
@@ -805,47 +872,69 @@ void printPointLightsAndDrone()
 // Track mouse motion while buttons are pressed
 
 void processMouseMotion(int xx, int yy)
-{
+	{
+		int deltaX = - xx + startX;
+		int deltaY =    yy - startY;
 
-	int deltaX, deltaY;
-	float alphaAux, betaAux;
-	float rAux;
+		// LEFT button dragging
+		if (tracking == 1) {
+			if (cameraMode == THIRD) {
+				// Horizontal drag -> orbit angle (radians)
+				float angleDelta = deltaX * CAM_ORBIT_SENSITIVITY_X;
+				camOrbitAngle += angleDelta;
 
-	deltaX =  - xx + startX;
-	deltaY =    yy - startY;
+				// keep angle in [-pi, pi] or [0, 2pi)
+				const float TWO_PI = 6.28318530718f;
+				if (camOrbitAngle >= TWO_PI) camOrbitAngle -= TWO_PI;
+				if (camOrbitAngle < 0.0f) camOrbitAngle += TWO_PI;
 
-	// left mouse button: move camera
-	if (tracking == 1) {
+				// Vertical drag -> change orbit height
+				float heightDelta = deltaY * CAM_ORBIT_SENSITIVITY_Y;
+				camOrbitHeight += heightDelta;
+				if (camOrbitHeight < CAM_ORBIT_MIN_HEIGHT) camOrbitHeight = CAM_ORBIT_MIN_HEIGHT;
+				if (camOrbitHeight > CAM_ORBIT_MAX_HEIGHT) camOrbitHeight = CAM_ORBIT_MAX_HEIGHT;
 
+				// update start positions for smooth dragging
+				startX = xx;
+				startY = yy;
 
-		alphaAux = alpha + deltaX;
-		betaAux = beta + deltaY;
+				// recompute camX/camY/camZ not necessary — renderSim() computes camera from camOrbit* each frame
+				return;
+			}
 
-		if (betaAux > 85.0f)
-			betaAux = 85.0f;
-		else if (betaAux < -85.0f)
-			betaAux = -85.0f;
-		rAux = r;
+			// existing "orbit with alpha/beta" behavior for other modes
+			float alphaAux = alpha + (- xx + startX);
+			float betaAux  = beta  + (yy - startY);
+			float rAux = r;
+
+			if (betaAux > 85.0f)
+				betaAux = 85.0f;
+			else if (betaAux < -85.0f)
+				betaAux = -85.0f;
+
+			camX = rAux * sin(alphaAux * 3.14f / 180.0f) * cos(betaAux * 3.14f / 180.0f);
+			camZ = rAux * cos(alphaAux * 3.14f / 180.0f) * cos(betaAux * 3.14f / 180.0f);
+			camY = rAux * sin(betaAux * 3.14f / 180.0f);
+		}
+		// RIGHT button dragging: zoom (keep as before for THIRD as well)
+		else if (tracking == 2) {
+			float alphaAux = alpha;
+			float betaAux = beta;
+			float rAux = r + (deltaY * 0.01f);
+			if (rAux < 0.1f)
+				rAux = 0.1f;
+
+			camX = rAux * sin(alphaAux * 3.14f / 180.0f) * cos(betaAux * 3.14f / 180.0f);
+			camZ = rAux * cos(alphaAux * 3.14f / 180.0f) * cos(betaAux * 3.14f / 180.0f);
+			camY = rAux * sin(betaAux * 3.14f / 180.0f);
+
+			// update start coords so drag is incremental
+			startX = xx;
+			startY = yy;
+		}
+	//  uncomment this if not using an idle or refresh func
+	//	glutPostRedisplay();
 	}
-	// right mouse button: zoom
-	else if (tracking == 2) {
-
-		alphaAux = alpha;
-		betaAux = beta;
-		rAux = r + (deltaY * 0.01f);
-		if (rAux < 0.1f)
-			rAux = 0.1f;
-	}
-
-	camX = rAux * sin(alphaAux * 3.14f / 180.0f) * cos(betaAux * 3.14f / 180.0f);
-	camZ = rAux * cos(alphaAux * 3.14f / 180.0f) * cos(betaAux * 3.14f / 180.0f);
-	camY = rAux *   						       sin(betaAux * 3.14f / 180.0f);
-
-
-//  uncomment this if not using an idle or refresh func
-//	glutPostRedisplay();
-}
-
 
 void mouseWheel(int wheel, int direction, int x, int y) {
 
