@@ -64,7 +64,7 @@ struct SpotLight {
 };
 
 uniform DirLight dirLight;
-uniform PointLight pointLights[6];
+uniform PointLight pointLights[7];
 uniform SpotLight spotLights[4];
 uniform int numPointLights;   // optional (if you prefer to only use first N)
 uniform int numSpotLights;    // optional
@@ -189,9 +189,9 @@ void main() {
     // directional light
     result += CalcDirLight(dirLight, n, viewDir);
 
-    // point lights (use either numPointLights or 6)
-    int pcount = (numPointLights > 0) ? numPointLights : 6;
-    pcount = min(pcount, 6);
+    // point lights (use either numPointLights or 7)
+    int pcount = (numPointLights > 0) ? numPointLights : 7;
+    pcount = min(pcount, 7);
     for (int i = 0; i < pcount; ++i) {
         result += CalcPointLight(pointLights[i], n, fragPos, viewDir);
     }

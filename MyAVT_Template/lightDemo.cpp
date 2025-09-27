@@ -70,8 +70,8 @@ float lightPos[4] = {4.0f, 15.0f, 2.0f, 1.0f};
 float dirLightDir[4] = { -0.2f, -1.0f, -0.3f, 0.0f }; // w=0 for direction
 
 // -- Light counts (single place to change) --
-#define NUM_POINT_LIGHTS 6
-#define NUM_SPOT_LIGHTS  2
+#define NUM_POINT_LIGHTS 7
+#define NUM_SPOT_LIGHTS  4
 
 // Runtime constants (use these when an `int` is required)
 const int kNumPointLights = NUM_POINT_LIGHTS;
@@ -84,17 +84,22 @@ float pointLightPos[NUM_POINT_LIGHTS][4] = {
     { 5.0f,  5.0f, -5.0f, 1.0f },
     {-5.0f,  5.0f, -5.0f, 1.0f },
     { 0.0f, 10.0f,  0.0f, 1.0f },
-    { 0.0f,  2.0f,  5.0f, 1.0f }
+    { 0.0f,  2.0f,  5.0f, 1.0f },
+	{ 15.0f,  15.0f,  5.0f, 1.0f }	
 };
 
 // Spotlights
 float spotLightPos[NUM_SPOT_LIGHTS][4] = {
-    { 0.0f, 10.0f, 0.0f, 1.0f },
-    { 5.0f, 10.0f, 5.0f, 1.0f }
+    { 25.0f, 12.0f, -10.0f, 1.0f },
+    { 5.0f, 12.0f, -10.0f, 1.0f },
+	{ 25.0f, 12.0f, 20.0f, 1.0f },
+    { 5.0f, 12.0f, 20.0f, 1.0f }
 };
 float spotLightDir[NUM_SPOT_LIGHTS][3] = {
-    { 0.0f, -1.0f, 0.0f },
-    { -1.0f, -1.0f, 0.0f }
+    { 0.0f, -1.0f, 0.5f },
+    { 0.0f, -1.0f, 0.5f },
+	{ 0.0f, -1.0f, -0.5f },
+    { 0.0f, -1.0f, -0.5f }
 };
 
 
@@ -423,7 +428,7 @@ void updatePointLightsFromBuildings()
     const float roofOffset = 1.0f;
 
     // If your cube mesh's base is at y=0 instead, use y = h + roofOffset.
-    for (int k = 0; k < NUM_POINT_LIGHTS; ++k) {
+    for (int k = 0; k < NUM_POINT_LIGHTS - 1; ++k) {
         if (k < (int)list.size()) {
             const B &b = list[k];
             float topY = b.h + roofOffset;   // <-- change to (b.h + roofOffset) if base-at-0
@@ -518,8 +523,8 @@ void renderSim(void) {
 		}
 
 		// ensure shader knows how many point/spot lights we plan to use
-		if (loc_numP >= 0) glUniform1i(loc_numP, kNumPointLights); // your scene uses 6 point lights
-		if (loc_numS >= 0) glUniform1i(loc_numS, kNumSpotLights); // you created 2 spot lights
+		if (loc_numP >= 0) glUniform1i(loc_numP, kNumPointLights); // your scene uses 7 point lights
+		if (loc_numS >= 0) glUniform1i(loc_numS, kNumSpotLights); // you created 4 spot lights
 	}
 
 	// ensure shader program active (you already call activateRenderMeshesShaderProg() above)
@@ -557,9 +562,11 @@ void renderSim(void) {
 	    mu.multMatrixPoint(gmu::VIEW, sDirWorld4, sDirEye4);
 	    float sDir3[3] = { sDirEye4[0], sDirEye4[1], sDirEye4[2] };
 
+		float intensity = 5.0f; // >1.0 makes it brighter, <1.0 makes it dimmer
+
 	    float sAmb[3]  = { 0.0f, 0.0f, 0.0f };
-	    float sDiff[3] = { 1.0f, 1.0f, 1.0f };
-	    float sSpec[3] = { 0.8f, 0.8f, 0.8f };
+	    float sDiff[3] = { 1.0f * intensity, 1.0f * intensity, 1.0f * intensity };
+	    float sSpec[3] = { 0.8f * intensity, 0.8f * intensity, 0.8f * intensity };
 
 	    // spot cutoffs (use cos of angle). Example: inner=12.5deg outer=17.5deg
 	    const float PI = 3.14159265f;

@@ -60,7 +60,7 @@ public:
 
   void setSpotLightMode(bool spotLightMode);
 
-  static const int MAX_POINT_LIGHTS = 6;
+  static const int MAX_POINT_LIGHTS = 7;
   static const int MAX_SPOT_LIGHTS = 4;
 
   void setDirectionalLight(float* direction, float* ambient, float* diffuse, float* specular);
