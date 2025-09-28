@@ -69,6 +69,8 @@ uniform PointLight pointLights[7];
 uniform SpotLight spotLights[4];
 uniform int numPointLights;   // optional (if you prefer to only use first N)
 uniform int numSpotLights;    // optional
+uniform vec2 terrainTile1; // (1,1) default — multiply texcoords to tile
+uniform vec2 terrainTile2; // (1,1) default — multiply texcoords to tile
 
 // ---------- Lighting helpers ----------
 vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir) {
@@ -174,8 +176,10 @@ void main() {
             vec3 outc = max(lighting, 0.07 * texel);
             colorOut = vec4(outc, 1.0);
         } else if (texMode == 3) {
-            vec3 texel = texture(texmap2, DataIn.tex_coord).rgb;
-            vec3 texel1 = texture(texmap1, DataIn.tex_coord).rgb;
+            vec2 tiledTC1 = DataIn.tex_coord * terrainTile1;
+            vec2 tiledTC2 = DataIn.tex_coord * terrainTile2;
+            vec3 texel = texture(texmap2, tiledTC2).rgb;
+            vec3 texel1 = texture(texmap1, tiledTC1).rgb;
             vec3 lighting = intensity * texel * texel1 + spec.rgb;
             vec3 outc = max(lighting, 0.07 * texel * texel1);
             colorOut = vec4(outc, 1.0);
@@ -218,8 +222,10 @@ void main() {
         vec3 outc = clamp(result * texel + 0.07 * texel, 0.0, 1.0);
         colorOut = vec4(outc, 1.0);
     } else {
-        vec3 texel = texture(texmap2, DataIn.tex_coord).rgb;
-        vec3 texel1 = texture(texmap1, DataIn.tex_coord).rgb;
+         vec2 tiledTC1 = DataIn.tex_coord * terrainTile1;
+        vec2 tiledTC2 = DataIn.tex_coord * terrainTile2;
+        vec3 texel = texture(texmap2, tiledTC2).rgb;
+        vec3 texel1 = texture(texmap1, tiledTC1).rgb;
         vec3 outc = clamp(result * texel * texel1 + 0.07 * texel * texel1, 0.0, 1.0);
         colorOut = vec4(outc, 1.0);
     }

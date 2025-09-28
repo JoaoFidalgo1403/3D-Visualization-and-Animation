@@ -708,8 +708,8 @@ void renderSim(void) {
 		}
 
 		// ensure shader knows how many point/spot lights we plan to use
-		if (loc_numP >= 0) glUniform1i(loc_numP, kNumPointLights); // your scene uses 7 point lights
-		if (loc_numS >= 0) glUniform1i(loc_numS, kNumSpotLights); // you created 4 spot lights
+		if (loc_numP >= 0) glUniform1i(loc_numP, kNumPointLights); // 7 point lights
+		if (loc_numS >= 0) glUniform1i(loc_numS, kNumSpotLights); // 4 spot lights
 	}
 
 	// ensure shader program active (you already call activateRenderMeshesShaderProg() above)
@@ -783,9 +783,22 @@ void renderSim(void) {
 	data.vm = mu.get(gmu::VIEW_MODEL),
 	data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
 	data.normal = mu.getNormalMatrix();
+
+	// set terrain tiling
+	GLint currProg = 0;
+	glGetIntegerv(GL_CURRENT_PROGRAM, &currProg);
+	if (currProg != 0) {
+		GLint loc_tile1 = glGetUniformLocation(currProg, "terrainTile1");
+		GLint loc_tile2 = glGetUniformLocation(currProg, "terrainTile2");
+		if (loc_tile1 >= 0) glUniform2f(loc_tile1, 64.0f, 64.0f);
+		if (loc_tile2 >= 0) glUniform2f(loc_tile2, 8.0f, 8.0f);
+
+	}
+
 	renderer.renderMesh(data);
 	mu.popMatrix(gmu::MODEL);
 
+	// Draw the Buildings
 	data.meshID = 0; // For the cube (myMeshes[0])
 	for (int i=0; i<6; ++i) {  // Draw the other objects in the scene (myMeshes[0] to myMeshes[5])
 		for (int j=0; j<6; ++j) {
@@ -1075,7 +1088,7 @@ void buildScene()
 {
 	//Texture Object definition~
 	renderer.TexObjArray.texture2D_Loader("assets/building.jpg");
-	renderer.TexObjArray.texture2D_Loader("assets/moontex.jpeg");
+	renderer.TexObjArray.texture2D_Loader("assets/marstex.jpg");
 	renderer.TexObjArray.texture2D_Loader("assets/noise2.jpg");
 	renderer.TexObjArray.texture2D_Loader("assets/noise.jpg");
 
