@@ -1,12 +1,12 @@
 ﻿  lightDemo.cpp
-C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(740,107): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
-C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(740,74): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
-C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(740,57): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
-C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(740,24): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+C:\Users\tomas\OneDrive\Desktop\University\AVT\Lab_Assignment_1\AVT_Project\MyAVT_Template\lightDemo.cpp(858,107): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+C:\Users\tomas\OneDrive\Desktop\University\AVT\Lab_Assignment_1\AVT_Project\MyAVT_Template\lightDemo.cpp(858,74): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+C:\Users\tomas\OneDrive\Desktop\University\AVT\Lab_Assignment_1\AVT_Project\MyAVT_Template\lightDemo.cpp(858,57): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+C:\Users\tomas\OneDrive\Desktop\University\AVT\Lab_Assignment_1\AVT_Project\MyAVT_Template\lightDemo.cpp(858,24): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
   Generating code
-  1 of 870 functions ( 0.1%) were compiled, the rest were copied from previous compilation.
+  2 of 875 functions ( 0.2%) were compiled, the rest were copied from previous compilation.
     0 functions were new in current compilation
     9 functions had inline decision re-evaluated but remain unchanged
   Finished generating code
-  MyAVT_Template.vcxproj -> C:\Users\joaof\Desktop\AVT_Project\x64\Release\MyAVT_Template.exe
+  MyAVT_Template.vcxproj -> C:\Users\tomas\OneDrive\Desktop\University\AVT\Lab_Assignment_1\AVT_Project\x64\Release\MyAVT_Template.exe
   0 File(s) copied

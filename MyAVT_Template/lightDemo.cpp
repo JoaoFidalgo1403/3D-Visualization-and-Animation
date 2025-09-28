@@ -73,6 +73,14 @@ const float CAM_ORBIT_SENSITIVITY_Y = 0.05f; // world units per pixel vertical
 const float CAM_ORBIT_MIN_HEIGHT = 1.0f;
 const float CAM_ORBIT_MAX_HEIGHT = 80.0f;
 
+// Drone Scale
+const float DRONE_WIDTH = 1.25f;
+const float DRONE_DEPTH = 0.75f;
+const float DRONE_HEIGHT = 0.15f;
+
+// Buildings Scale
+const float BUILDING_WIDTH = 10.0f;
+const float BUILDING_DEPTH = 10.0f;
 
 // Mouse Tracking Variables
 int startX, startY, tracking = 0;
@@ -145,6 +153,7 @@ struct Drone {
     float pos[3] = {1.0f, 10.0f, -2.0f}; // Initial position
 	float dir[3] = {0.0f, 1.0f, 0.0f}; // Initial direction (pointing up)
 	float velocity[3] = {0.0f, 0.0f, 0.0f}; // Initial velocity
+	float collisionVel[3] = {0.0f, 0.0f, 0.0f}; // Velocity of collision normal
     float throttle = 0.0f;             // current throttle level
     float yaw = 0.0f;      // Rotation around Y (degrees)
     float pitch = 0.0f;    // Forward/backward tilt (degrees)
@@ -164,6 +173,11 @@ struct Bird {
     }
 };
 std::vector<Bird> birds;
+
+struct AABB {
+	float minX, minY, minZ;
+	float maxX, maxY, maxZ;
+};
 
 /// ::::::::::::::::::::::::::::::::::::::::::::::::CALLBACK FUNCIONS:::::::::::::::::::::::::::::::::::::::::::::::::://///
 
@@ -299,8 +313,109 @@ void updateBirds(float dt) {
             b.rotation = 0.0f;
             b.rotSpeed = 90.0f * ((rand() / (float)RAND_MAX) - 0.5f);
         }
+
+		// Calculate collision
+		float dist_x = drone.pos[0] - b.pos[0];
+		float dist_y = drone.pos[1] - b.pos[1];
+		float dist_z = drone.pos[2] - b.pos[2];
+    	if (std::sqrt(dist_x*dist_x + dist_y*dist_y + dist_z*dist_z) <= 1.0f) {
+			drone = Drone(); // Reset drone
+		} 
     }
 }
+
+
+// ------------------------------------------------------------
+//
+// Collision Detection
+//
+
+AABB computeDroneAABB() {
+    AABB box;
+    float halfWidth = DRONE_WIDTH / 2.0f;
+    float halfHeight = DRONE_HEIGHT / 2.0f;
+    float halfDepth = DRONE_DEPTH / 2.0f;
+
+    // Center at drone.pos
+    box.minX = drone.pos[0] - halfWidth;
+    box.maxX = drone.pos[0] + halfWidth;
+    box.minY = drone.pos[1] - halfHeight;
+    box.maxY = drone.pos[1] + halfHeight;
+    box.minZ = drone.pos[2] - halfDepth;
+    box.maxZ = drone.pos[2] + halfDepth;
+    return box;
+}
+
+AABB computeBuildingAABB(int i, int j) {
+    AABB box;
+    float width = 10.0f;
+    float depth = 10.0f;
+    float height = cubeHeights[i][j];
+
+    float x = -20.0f + i * 20.0f;
+    float z = -20.0f + j * 20.0f;
+
+    box.minX = x;
+    box.maxX = x + width;
+    box.minY = 0.0f;
+    box.maxY = height;
+    box.minZ = z;
+    box.maxZ = z + depth;
+    return box;
+}
+
+bool checkCollision(const AABB &a, const AABB &b) {
+    return (a.minX <= b.maxX && a.maxX >= b.minX) &&
+           (a.minY <= b.maxY && a.maxY >= b.minY) &&
+           (a.minZ <= b.maxZ && a.maxZ >= b.minZ);
+}
+
+void computeNormalAfterCollision(float buildingPos[3]) {
+	float collision_vector[3] = {fabs(drone.pos[0] - buildingPos[0]), 0.0f, fabs(drone.pos[2] - buildingPos[2])};
+	int direction_index = 0;
+
+	if (collision_vector[0] < BUILDING_WIDTH/2.0f && collision_vector[2] < BUILDING_DEPTH/2.0f) {
+		direction_index = 1; // Y axis
+	} else {
+		direction_index = collision_vector[0] <= collision_vector[2] ? 2 : 0; // Z or X axis
+	}
+	
+	printf("Collision Vector: (%.2f, %.2f, %.2f)\n", collision_vector[0], collision_vector[1], collision_vector[2]);
+	printf("Direction of Impact: %d\n", direction_index);
+
+	drone.collisionVel[direction_index] = - drone.velocity[direction_index] * 2.0f;
+	printf("Collision Velocity: (%.2f, %.2f, %.2f)\n", drone.collisionVel[0], drone.collisionVel[1], drone.collisionVel[2]);
+}
+
+void handleCollisions() {	
+	AABB droneBox = computeDroneAABB();
+
+	// Check against ground (y = -1.15f)
+	if (droneBox.minY <= -1.15f) {
+		std::cout << "Collision with ground\n";
+		drone.collisionVel[1] = - drone.velocity[1] * 2.0f;
+		return;
+	}
+
+	bool hasCollided = false;
+
+	// Check against buildings
+	for (int i = 0; i < 6; ++i) {
+		if(hasCollided) break;
+		for (int j = 0; j < 6; ++j) {
+			if (i == 3 && j == 4 || (i == 1 || i == 2) && j == 1) continue;
+
+			AABB buildingBox = computeBuildingAABB(i, j);
+			if (checkCollision(droneBox, buildingBox)) {
+				std::cout << "Collision with building at (" << i << "," << j << ")\n";
+				float buildingPos[3] = {-15.0f + i * 20.0f, 0.0f, -15.0f + j * 20.0f};
+				computeNormalAfterCollision(buildingPos);
+				return;
+			}
+		}
+	}
+}
+
 
 // ------------------------------------------------------------
 //
@@ -311,6 +426,8 @@ void updateDroneState(float dt) {
 	// Parameters (tweak to taste)
     const float maxThrottle = 15.0f;   // upward accel when throttleCmd == 1
     const float maxTilt = 46.0f;            // degrees: maximum pitch/roll allowed
+	const float dampingFactor = 0.992f; // Reduce velocity by 50% on collision
+
 	
 	// Limits
 	if (drone.yaw > 360.0f || drone.yaw < -360.0f) drone.yaw = 0.0f;
@@ -337,14 +454,20 @@ void updateDroneState(float dt) {
 	drone.dir[2] = cos(yawRad) * (sin(rollRad) / sin(maxTiltRad)) + sin(yawRad) * (sin(pitchRad) / sin(maxTiltRad));
 
 	drone.velocity[0] = (10 + drone.throttle) * drone.dir[0];
-	drone.velocity[1] = drone.throttle * drone.dir[1];
+	drone.velocity[1] = (drone.throttle == 0.0f) ? drone.velocity[1] * dampingFactor : drone.throttle * drone.dir[1];
 	drone.velocity[2] = (10 + drone.throttle) * drone.dir[2];
 
-	// Integrate position
+	// Check for collisions 
+	handleCollisions();
 
-	drone.pos[0] += drone.velocity[0] * dt;
-    drone.pos[1] += drone.velocity[1] * dt;
-    drone.pos[2] += drone.velocity[2] * dt;
+	// Integrate position
+	drone.pos[0] += (drone.velocity[0] + drone.collisionVel[0]) * dt;
+    drone.pos[1] += (drone.velocity[1] + drone.collisionVel[1]) * dt;
+    drone.pos[2] += (drone.velocity[2] + drone.collisionVel[2]) * dt;
+
+	drone.collisionVel[0] *= dampingFactor; if (fabs(drone.collisionVel[0]) < 0.01f) drone.collisionVel[0] = 0.0f;
+	drone.collisionVel[1] *= dampingFactor; if (fabs(drone.collisionVel[1]) < 0.01f) drone.collisionVel[1] = 0.0f;
+	drone.collisionVel[2] *= dampingFactor; if (fabs(drone.collisionVel[2]) < 0.01f) drone.collisionVel[2] = 0.0f;
 }
 
 
@@ -387,7 +510,7 @@ void drawDrone(dataMesh &data) {
 		mu.pushMatrix(gmu::MODEL);
 		mu.translate(gmu::MODEL, drone_parts_position[i].x, drone_parts_position[i].y, drone_parts_position[i].z);
 		if (i == 0) {
-			mu.scale(gmu::MODEL, 1.25f, 0.15f, 0.75f);
+			mu.scale(gmu::MODEL, DRONE_WIDTH, DRONE_HEIGHT, DRONE_DEPTH);
 		} else if (i > 0 && i < 3) {
 			mu.scale(gmu::MODEL, 0.5f, 0.05f, 0.5f);
 		} else {
@@ -488,54 +611,47 @@ void renderSim(void) {
 	mu.loadIdentity(gmu::MODEL);
 	
 	switch (cameraMode) {
-		case FOLLOW:
-			mu.lookAt(drone.pos[0] + camX, drone.pos[1] + camY,  drone.pos[2] + camZ, 
-					  drone.pos[0] + 1.0f, drone.pos[1] + 0.25f, drone.pos[2] + 1.0f, 
-					  0, 1, 0);
-			mu.loadIdentity(gmu::PROJECTION);
-			mu.perspective(53.13f, (1.0f * WinX) / WinY, 0.1f, 1000.0f);
-			break;
 		case THIRD:
-		{
-			// optionally advance orbit angle (only if auto is enabled)
-			if (camOrbitAuto) {
-				camOrbitAngle += camOrbitSpeed * frameDt;
-				const float TWO_PI = 6.28318530718f;
-				if (camOrbitAngle >= TWO_PI) camOrbitAngle -= TWO_PI;
-				if (camOrbitAngle < 0.0f) camOrbitAngle += TWO_PI;
+			{
+				// optionally advance orbit angle (only if auto is enabled)
+				if (camOrbitAuto) {
+					camOrbitAngle += camOrbitSpeed * frameDt;
+					const float TWO_PI = 6.28318530718f;
+					if (camOrbitAngle >= TWO_PI) camOrbitAngle -= TWO_PI;
+					if (camOrbitAngle < 0.0f) camOrbitAngle += TWO_PI;
+				}
+
+				// Compose final orbit angle as: drone yaw (in radians) + user offset (camOrbitAngle)
+				const float DEG2RAD = 3.14159265f / 180.0f;
+				float yawRad = drone.yaw * DEG2RAD;
+				// inside THIRD case, before computing finalAngle
+				static float smoothYaw = 0.0f;
+				const float smoothFactor = 0.08f; // larger = snappier, smaller = smoother
+				smoothYaw = smoothYaw + (yawRad - smoothYaw) * smoothFactor;
+				float finalAngle = camOrbitAngle - (camOrbitFollowYaw ? smoothYaw : 0.0f);
+
+				// compute camera offset in drone-local world coords (orbit around Y)
+				float ox = camOrbitRadius * cosf(finalAngle);
+				float oz = camOrbitRadius * sinf(finalAngle);
+
+				// world-space camera position = drone position + offset
+				float camWorldX = drone.pos[0] + ox;
+				float camWorldY = drone.pos[1] + camOrbitHeight;
+				float camWorldZ = drone.pos[2] + oz;
+
+				// where to look: the drone's position (selfie style)
+				float lookX = drone.pos[0];
+				float lookY = drone.pos[1] + camOrbitLookHeight;
+				float lookZ = drone.pos[2];
+
+				mu.lookAt(camWorldX, camWorldY, camWorldZ,
+						lookX, lookY, lookZ,
+						0, 1, 0);
+
+				mu.loadIdentity(gmu::PROJECTION);
+				mu.perspective(53.13f, (1.0f * WinX) / WinY, 0.1f, 1000.0f);
 			}
-
-			// Compose final orbit angle as: drone yaw (in radians) + user offset (camOrbitAngle)
-			const float DEG2RAD = 3.14159265f / 180.0f;
-			float yawRad = drone.yaw * DEG2RAD;
-			// inside THIRD case, before computing finalAngle
-			static float smoothYaw = 0.0f;
-			const float smoothFactor = 0.08f; // larger = snappier, smaller = smoother
-			smoothYaw = smoothYaw + (yawRad - smoothYaw) * smoothFactor;
-			float finalAngle = camOrbitAngle - (camOrbitFollowYaw ? smoothYaw : 0.0f);
-
-			// compute camera offset in drone-local world coords (orbit around Y)
-			float ox = camOrbitRadius * cosf(finalAngle);
-			float oz = camOrbitRadius * sinf(finalAngle);
-
-			// world-space camera position = drone position + offset
-			float camWorldX = drone.pos[0] + ox;
-			float camWorldY = drone.pos[1] + camOrbitHeight;
-			float camWorldZ = drone.pos[2] + oz;
-
-			// where to look: the drone's position (selfie style)
-			float lookX = drone.pos[0];
-			float lookY = drone.pos[1] + camOrbitLookHeight;
-			float lookZ = drone.pos[2];
-
-			mu.lookAt(camWorldX, camWorldY, camWorldZ,
-					lookX, lookY, lookZ,
-					0, 1, 0);
-
-			mu.loadIdentity(gmu::PROJECTION);
-			mu.perspective(53.13f, (1.0f * WinX) / WinY, 0.1f, 1000.0f);
-		}
-		break;
+			break;
 
 
 		case TOP_ORTHO:
@@ -679,7 +795,7 @@ void renderSim(void) {
 			data.texMode = 0; //no texturing
 			mu.pushMatrix(gmu::MODEL);
 			mu.translate(gmu::MODEL, -20.0f + i * 20.0f, 0.0f, -20.0f + j * 20.0f);
-			mu.scale(gmu::MODEL, 10.0f, cubeHeights[i][j], 10.0f);
+			mu.scale(gmu::MODEL, BUILDING_WIDTH, cubeHeights[i][j], BUILDING_DEPTH);
 
 			mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
 			mu.computeNormalMatrix3x3();
@@ -723,8 +839,10 @@ void renderSim(void) {
 								"\n\nPitch: " + std::to_string(drone.pitch) + 
 								"\n\nRoll: " + std::to_string(drone.roll) +
 								"\n\n\nThrottle: " + std::to_string(drone.throttle) +
-								"\n\n\nDirection: (" + std::to_string(drone.dir[0]) + ", " + std::to_string(drone.dir[1]) + ", " + std::to_string(drone.dir[2]) + ")", 
-								{30, 450}, 0.3f };
+								"\n\n\nDirection: (" + std::to_string(drone.dir[0]) + ", " + std::to_string(drone.dir[1]) + ", " + std::to_string(drone.dir[2]) + ")" +
+								"\n\n\nVelocity: (" + std::to_string(drone.velocity[0]) + ", " + std::to_string(drone.velocity[1]) + ", " + std::to_string(drone.velocity[2]) + ")" +
+								"\n\n\nPosition: (" + std::to_string(drone.pos[0]) + ", " + std::to_string(drone.pos[1]) + ", " + std::to_string(drone.pos[2]) + ")", 
+								{30, 650}, 0.3f };
 		//the glyph contains transparent background colors and non-transparent for the actual character pixels. So we use the blending
 		glEnable(GL_BLEND);  
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -804,7 +922,6 @@ void processKeys(unsigned char key, int xx, int yy)
 		case '1': cameraMode = THIRD; printf("Camera mode: THIRD PERSON ORBIT\n"); break;
         case '2': cameraMode = TOP_ORTHO; printf("Camera mode: TOP ORTHO\n"); break;
         case '3': cameraMode = TOP_PERSPECTIVE; printf("Camera mode: TOP PERSPECTIVE\n"); break;
-        case '4': cameraMode = FOLLOW; printf("Camera mode: FOLLOW\n"); break;
 
         // throttle: set command so updateDroneState integrates throttle
         case 'w': drone.throttle +=  1.0f; break;
@@ -1159,6 +1276,3 @@ int main(int argc, char **argv) {
 
 	return(0);
 }
-
-
-
