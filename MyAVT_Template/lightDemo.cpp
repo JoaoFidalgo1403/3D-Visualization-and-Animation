@@ -661,7 +661,7 @@ void renderSim(void) {
 	dataMesh data;
 
 	data.meshID = 6; // For the terrain (last mesh)
-	data.texMode = 0; //modulate diffuse color with texel color
+	data.texMode = 3; // any value not 0,1,2 will take the "two-texture" path in your mesh.frag
 	data.vm = mu.get(gmu::VIEW_MODEL),
 	data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
 	data.normal = mu.getNormalMatrix();
@@ -956,7 +956,7 @@ void buildScene()
 {
 	//Texture Object definition
 	renderer.TexObjArray.texture2D_Loader("assets/stone.tga");
-	renderer.TexObjArray.texture2D_Loader("assets/checker.png");
+	renderer.TexObjArray.texture2D_Loader("assets/moontex.jpeg");
 	renderer.TexObjArray.texture2D_Loader("assets/lightwood.tga");
 
 	//Scene geometry with triangle meshes
@@ -1044,7 +1044,7 @@ void buildScene()
 	memcpy(amesh.mat.specular, spec, 4 * sizeof(float));
 	memcpy(amesh.mat.emissive, emissive, 4 * sizeof(float));
 	amesh.mat.shininess = shininess;
-	amesh.mat.texCount = 1;
+	amesh.mat.texCount = 2;
 	renderer.myMeshes.push_back(amesh);
 
 	//The truetypeInit creates a texture object in TexObjArray for storing the fontAtlasTexture
