@@ -382,6 +382,13 @@ void computeNormalAfterCollision(float buildingPos[3]) {
 void handleCollisions() {	
 	AABB droneBox = computeDroneAABB();
 
+	// Check against ground (y = -1.15f)
+	if (droneBox.minY <= -1.15f) {
+		std::cout << "Collision with ground\n";
+		drone.collisionVel[1] = - drone.velocity[1] * 2.0f;
+		return;
+	}
+
 	bool hasCollided = false;
 
 	// Check against buildings
@@ -824,8 +831,10 @@ void renderSim(void) {
 								"\n\nPitch: " + std::to_string(drone.pitch) + 
 								"\n\nRoll: " + std::to_string(drone.roll) +
 								"\n\n\nThrottle: " + std::to_string(drone.throttle) +
-								"\n\n\nDirection: (" + std::to_string(drone.dir[0]) + ", " + std::to_string(drone.dir[1]) + ", " + std::to_string(drone.dir[2]) + ")", 
-								{30, 450}, 0.3f };
+								"\n\n\nDirection: (" + std::to_string(drone.dir[0]) + ", " + std::to_string(drone.dir[1]) + ", " + std::to_string(drone.dir[2]) + ")" +
+								"\n\n\nVelocity: (" + std::to_string(drone.velocity[0]) + ", " + std::to_string(drone.velocity[1]) + ", " + std::to_string(drone.velocity[2]) + ")" +
+								"\n\n\nPosition: (" + std::to_string(drone.pos[0]) + ", " + std::to_string(drone.pos[1]) + ", " + std::to_string(drone.pos[2]) + ")", 
+								{30, 650}, 0.3f };
 		//the glyph contains transparent background colors and non-transparent for the actual character pixels. So we use the blending
 		glEnable(GL_BLEND);  
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -1259,6 +1268,3 @@ int main(int argc, char **argv) {
 
 	return(0);
 }
-
-
-
