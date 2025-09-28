@@ -24,6 +24,7 @@ uniform Materials mat;
 uniform sampler2D texmap;
 uniform sampler2D texmap1;
 uniform sampler2D texmap2;
+uniform sampler2D texmap3;
 
 uniform int texMode;
 uniform bool spotlight_mode;    // legacy toggle (keeps old behaviour)
@@ -172,7 +173,7 @@ void main() {
             vec3 lighting = intensity * texel + spec.rgb;
             vec3 outc = max(lighting, 0.07 * texel);
             colorOut = vec4(outc, 1.0);
-        } else {
+        } else if (texMode == 3) {
             vec3 texel = texture(texmap2, DataIn.tex_coord).rgb;
             vec3 texel1 = texture(texmap1, DataIn.tex_coord).rgb;
             vec3 lighting = intensity * texel * texel1 + spec.rgb;

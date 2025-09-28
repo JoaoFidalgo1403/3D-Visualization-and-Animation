@@ -397,7 +397,7 @@ void drawDrone(dataMesh &data) {
 		mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
 		mu.computeNormalMatrix3x3();
 
-		data.texMode = 1;   //modulate diffuse color with texel color
+		data.texMode = 2;   //modulate diffuse color with texel color
 		data.vm = mu.get(gmu::VIEW_MODEL),
 		data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
 		data.normal = mu.getNormalMatrix();
@@ -481,6 +481,7 @@ void renderSim(void) {
 	renderer.setTexUnit(0, 0);
 	renderer.setTexUnit(1, 1);
 	renderer.setTexUnit(2, 2);
+	renderer.setTexUnit(3, 3);
 
 	// load identity matrices
 	mu.loadIdentity(gmu::VIEW);
@@ -570,8 +571,9 @@ void renderSim(void) {
 	// prepare 3-component arrays for the renderer API
 	float dirEye3[3] = { dAux[0], dAux[1], dAux[2] };
 	float dirAmb[3]  = { 0.05f, 0.05f, 0.05f };
-	float dirDiff[3] = { 0.40f, 0.40f, 0.40f };
-	float dirSpec[3] = { 0.70f, 0.70f, 0.70f };
+	float sunIntensity = 4.0f; // 1.0 = same, 2.0 = twice as bright
+	float dirDiff[3] = { 0.40f * sunIntensity, 0.40f * sunIntensity, 0.40f * sunIntensity };
+	float dirSpec[3] = { 0.70f * sunIntensity, 0.70f * sunIntensity, 0.70f * sunIntensity };
 
 	// Query currently bound program (safe even if renderer hides program id)
 	GLint prog = 0;
@@ -682,7 +684,7 @@ void renderSim(void) {
 			mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
 			mu.computeNormalMatrix3x3();
 
-			data.texMode = 1;   //modulate diffuse color with texel color
+			data.texMode = 2;   //modulate diffuse color with texel color
 			data.vm = mu.get(gmu::VIEW_MODEL),
 			data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
 			data.normal = mu.getNormalMatrix();
@@ -954,10 +956,13 @@ void mouseWheel(int wheel, int direction, int x, int y) {
 
 void buildScene()
 {
-	//Texture Object definition
-	renderer.TexObjArray.texture2D_Loader("assets/stone.tga");
+	//Texture Object definition~
+	renderer.TexObjArray.texture2D_Loader("assets/building.jpg");
 	renderer.TexObjArray.texture2D_Loader("assets/moontex.jpeg");
-	renderer.TexObjArray.texture2D_Loader("assets/lightwood.tga");
+	renderer.TexObjArray.texture2D_Loader("assets/noise2.jpg");
+	renderer.TexObjArray.texture2D_Loader("assets/noise.jpg");
+
+
 
 	//Scene geometry with triangle meshes
 
@@ -967,9 +972,9 @@ void buildScene()
 	float diff[] = { 0.8f, 0.6f, 0.4f, 1.0f };
 	float spec[] = { 0.8f, 0.8f, 0.8f, 1.0f };
 
-	float amb1[] = { 0.3f, 0.0f, 0.0f, 1.0f };
-	float diff1[] = { 0.8f, 0.1f, 0.1f, 1.0f };
-	float spec1[] = { 0.3f, 0.3f, 0.3f, 1.0f };
+	float amb1[]  = { 0.20f, 0.20f, 0.20f, 1.0f };
+	float diff1[] = { 0.60f, 0.60f, 0.60f, 1.0f }; // main visible color = grey
+	float spec1[] = { 0.30f, 0.30f, 0.30f, 1.0f };
 
 	float emissive[] = { 0.0f, 0.0f, 0.0f, 1.0f };
 	float shininess = 100.0f;
