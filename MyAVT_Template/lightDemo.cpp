@@ -221,7 +221,7 @@ void changeSize(int w, int h) {
 // Update Birds State
 //
 
-
+// TODO SPAWN POSITIONS NEED TO BE CHANGED!!!
 // Initialize birds with random positions, velocities, and rotation speeds
 void initBirds(int numBirds) {
     birds.clear();
@@ -260,7 +260,7 @@ void updateBirds(float dt) {
         float dist = sqrt(dx*dx + dy*dy + dz*dz);
 		if (dist > maxDistFromDrone) {
 			// Random point on/in spherical shell between minDistFromDrone and maxDistFromDrone
-			const float minDistFromDrone = 16.0f;    // < maxDistFromDrone; tweak as desired
+			const float minDistFromDrone = 200.0f;    // < maxDistFromDrone; tweak as desired
 			const float maxDist = maxDistFromDrone; // keep existing name
 
 			// Random angles for uniform direction on sphere
