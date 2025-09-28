@@ -237,11 +237,9 @@ void initBirds(int numBirds) {
     }
 }
 
-// PUTO poe os passaros a darem spawn a 1a vez tambem no interior da esfera
-
 // Update bird positions and rotations
 void updateBirds(float dt) {
-    const float maxDistFromDrone = 25.0f; // radius around drone
+    const float maxDistFromDrone = 200.0f; // radius around drone
 
     // Speed multiplier after 30 seconds
     int elapsedMs = glutGet(GLUT_ELAPSED_TIME);
@@ -260,21 +258,33 @@ void updateBirds(float dt) {
         float dy = b.pos[1] - drone.pos[1];
         float dz = b.pos[2] - drone.pos[2];
         float dist = sqrt(dx*dx + dy*dy + dz*dz);
-        if (dist > maxDistFromDrone) {
-            // Random point on sphere surface
-            float theta = 2.0f * 3.14159265f * (rand() / (float)RAND_MAX); // azimuthal angle
-            float phi = acos(2.0f * (rand() / (float)RAND_MAX) - 1.0f);    // polar angle
-            float r = maxDistFromDrone;
-            b.pos[0] = drone.pos[0] + r * sin(phi) * cos(theta);
-            b.pos[1] = drone.pos[1] + r * cos(phi);
-            b.pos[2] = drone.pos[2] + r * sin(phi) * sin(theta);
+		if (dist > maxDistFromDrone) {
+			// Random point on/in spherical shell between minDistFromDrone and maxDistFromDrone
+			const float minDistFromDrone = 16.0f;    // < maxDistFromDrone; tweak as desired
+			const float maxDist = maxDistFromDrone; // keep existing name
 
-            // Inward direction with random spread
-            float dir[3] = {
-                drone.pos[0] - b.pos[0],
-                drone.pos[1] - b.pos[1],
-                drone.pos[2] - b.pos[2]
-            };
+			// Random angles for uniform direction on sphere
+			float theta = 2.0f * 3.14159265f * (rand() / (float)RAND_MAX); // azimuthal
+			float cosPhi = 2.0f * (rand() / (float)RAND_MAX) - 1.0f;       // cos(phi) uniform in [-1,1]
+			float sinPhi = sqrtf(1.0f - cosPhi * cosPhi);
+
+			// Choose radius so distribution is uniform in volume of shell (no clustering near outer surface)
+			float u = rand() / (float)RAND_MAX; // in [0,1)
+			float minR3 = minDistFromDrone * minDistFromDrone * minDistFromDrone;
+			float maxR3 = maxDist * maxDist * maxDist;
+			float r_samp = cbrtf(u * (maxR3 - minR3) + minR3);
+
+			// convert spherical -> cartesian, offset by drone.position
+			b.pos[0] = drone.pos[0] + r_samp * sinPhi * cosf(theta);
+			b.pos[1] = drone.pos[1] + r_samp * cosPhi;
+			b.pos[2] = drone.pos[2] + r_samp * sinPhi * sinf(theta);
+
+			// Inward direction with random spread (unchanged)
+			float dir[3] = {
+				drone.pos[0] - b.pos[0],
+				drone.pos[1] - b.pos[1],
+				drone.pos[2] - b.pos[2]
+			};
             // Normalize direction
             float len = sqrt(dir[0]*dir[0] + dir[1]*dir[1] + dir[2]*dir[2]);
             dir[0] /= len; dir[1] /= len; dir[2] /= len;
@@ -482,7 +492,7 @@ void drawBirds(dataMesh& data) {
         mu.pushMatrix(gmu::MODEL);
         mu.translate(gmu::MODEL, b.pos[0], b.pos[1], b.pos[2]);
         mu.rotate(gmu::MODEL, b.rotation, 0, 1, 0); // Rotate around Y axis
-        mu.scale(gmu::MODEL, 0.2f, 0.2f, 0.2f); // Sphere size
+        mu.scale(gmu::MODEL, 0.4f, 0.4f, 0.4f); // Sphere size
         mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
         mu.computeNormalMatrix3x3();
         data.texMode = 0;
@@ -669,6 +679,14 @@ void renderSim(void) {
 			mu.loadIdentity(gmu::PROJECTION);
 			mu.perspective(53.13f, (1.0f * WinX) / WinY, 0.1f, 1000.0f);
 			break;
+
+		case FOLLOW:
+			mu.lookAt(drone.pos[0] + camX, drone.pos[1] + camY,  drone.pos[2] + camZ, 
+					  drone.pos[0] + 1.0f, drone.pos[1] + 0.25f, drone.pos[2] + 1.0f, 
+					  0, 1, 0);
+			mu.loadIdentity(gmu::PROJECTION);
+			mu.perspective(53.13f, (1.0f * WinX) / WinY, 0.1f, 1000.0f);
+			break;
 	}
 
 	//send the light position in eye coordinates
@@ -791,7 +809,7 @@ void renderSim(void) {
 		GLint loc_tile1 = glGetUniformLocation(currProg, "terrainTile1");
 		GLint loc_tile2 = glGetUniformLocation(currProg, "terrainTile2");
 		if (loc_tile1 >= 0) glUniform2f(loc_tile1, 64.0f, 64.0f);
-		if (loc_tile2 >= 0) glUniform2f(loc_tile2, 8.0f, 8.0f);
+		if (loc_tile2 >= 0) glUniform2f(loc_tile2, 32.0f, 32.0f);
 
 	}
 
@@ -935,6 +953,7 @@ void processKeys(unsigned char key, int xx, int yy)
 		case '1': cameraMode = THIRD; printf("Camera mode: THIRD PERSON ORBIT\n"); break;
         case '2': cameraMode = TOP_ORTHO; printf("Camera mode: TOP ORTHO\n"); break;
         case '3': cameraMode = TOP_PERSPECTIVE; printf("Camera mode: TOP PERSPECTIVE\n"); break;
+		case '4': cameraMode = FOLLOW; printf("Camera mode: FOLLOW\n"); break;
 
         // throttle: set command so updateDroneState integrates throttle
         case 'w': drone.throttle +=  1.0f; break;
@@ -1282,7 +1301,7 @@ int main(int argc, char **argv) {
 	//renderer.cacheLightUniformLocations();
 
 	// Initialize birds
-	initBirds(50); // Create 50 birds
+	initBirds(100); // Create 100 birds
 
 	//  GLUT main loop
 	glutMainLoop();
