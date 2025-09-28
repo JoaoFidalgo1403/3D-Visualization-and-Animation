@@ -313,6 +313,14 @@ void updateBirds(float dt) {
             b.rotation = 0.0f;
             b.rotSpeed = 90.0f * ((rand() / (float)RAND_MAX) - 0.5f);
         }
+
+		// Calculate collision
+		float dist_x = drone.pos[0] - b.pos[0];
+		float dist_y = drone.pos[1] - b.pos[1];
+		float dist_z = drone.pos[2] - b.pos[2];
+    	if (std::sqrt(dist_x*dist_x + dist_y*dist_y + dist_z*dist_z) <= 1.0f) {
+			drone = Drone(); // Reset drone
+		} 
     }
 }
 
