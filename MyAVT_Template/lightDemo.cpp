@@ -221,25 +221,88 @@ void changeSize(int w, int h) {
 // Update Birds State
 //
 
-// TODO SPAWN POSITIONS NEED TO BE CHANGED!!!
-// Initialize birds with random positions, velocities, and rotation speeds
+struct BirdData {
+    float pos[3];
+    float velocity[3];
+    float rotSpeed;
+};
+
+// Helper function to generate a new bird spawn around the drone
+BirdData spawnBird(float minDistFromDrone, float maxDistFromDrone) {
+    BirdData b;
+
+    // Random angles for uniform direction on sphere
+    float theta = 2.0f * 3.14159265f * (rand() / (float)RAND_MAX); 
+    float cosPhi = 2.0f * (rand() / (float)RAND_MAX) - 1.0f;      
+    float sinPhi = sqrtf(1.0f - cosPhi * cosPhi);
+
+    // Radius sampled uniformly in spherical shell volume
+    float u = rand() / (float)RAND_MAX;
+    float minR3 = minDistFromDrone * minDistFromDrone * minDistFromDrone;
+    float maxR3 = maxDistFromDrone * maxDistFromDrone * maxDistFromDrone;
+    float r_samp = cbrtf(u * (maxR3 - minR3) + minR3);
+
+    // Convert spherical → cartesian, offset by drone position
+    b.pos[0] = drone.pos[0] + r_samp * sinPhi * cosf(theta);
+    b.pos[1] = drone.pos[1] + r_samp * cosPhi;
+    b.pos[2] = drone.pos[2] + r_samp * sinPhi * sinf(theta);
+
+    // Inward direction
+    float dir[3] = { drone.pos[0] - b.pos[0], drone.pos[1] - b.pos[1], drone.pos[2] - b.pos[2] };
+    float len = sqrt(dir[0]*dir[0] + dir[1]*dir[1] + dir[2]*dir[2]);
+    dir[0] /= len; dir[1] /= len; dir[2] /= len;
+
+    // Random spread (~30°)
+    float spreadAngle = 0.5236f; 
+    float randAngle = (rand() / (float)RAND_MAX) * spreadAngle;
+
+    float axis[3] = { -dir[1], dir[0], 0 };
+    float axisLen = sqrt(axis[0]*axis[0] + axis[1]*axis[1] + axis[2]*axis[2]);
+    if (axisLen > 0.0001f) {
+        axis[0] /= axisLen; axis[1] /= axisLen; axis[2] /= axisLen;
+    } else {
+        axis[0] = 1; axis[1] = 0; axis[2] = 0;
+    }
+
+    float cosA = cos(randAngle);
+    float sinA = sin(randAngle);
+    float dot = dir[0]*axis[0] + dir[1]*axis[1] + dir[2]*axis[2];
+    float newDir[3];
+    newDir[0] = cosA * dir[0] + sinA * (axis[1]*dir[2] - axis[2]*dir[1]) + (1-cosA)*dot*axis[0];
+    newDir[1] = cosA * dir[1] + sinA * (axis[2]*dir[0] - axis[0]*dir[2]) + (1-cosA)*dot*axis[1];
+    newDir[2] = cosA * dir[2] + sinA * (axis[0]*dir[1] - axis[1]*dir[0]) + (1-cosA)*dot*axis[2];
+
+    // Velocity
+    float speed = 10.0f;
+    b.velocity[0] = speed * newDir[0];
+    b.velocity[1] = speed * newDir[1];
+    b.velocity[2] = speed * newDir[2];
+
+    // Rotation speed
+    b.rotSpeed = 90.0f * ((rand() / (float)RAND_MAX) - 0.5f);
+
+    return b;
+}
+
+
+// Initialize birds with random positions,velocities, and rotation speeds
 void initBirds(int numBirds) {
     birds.clear();
+    const float minDist = 30.0f;
+    const float maxDist = 60.0f;
+
     for (int i = 0; i < numBirds; ++i) {
-        float x = -10.0f + 50.0f * (rand() / (float)RAND_MAX);
-        float y = 5.0f + 8.0f * (rand() / (float)RAND_MAX);
-        float z = -10.0f + 30.0f * (rand() / (float)RAND_MAX);
-        float vx = 10.0f * ((rand() / (float)RAND_MAX) - 0.5f);
-        float vy = 10.0f * ((rand() / (float)RAND_MAX) - 0.5f);
-        float vz = 10.0f * ((rand() / (float)RAND_MAX) - 0.5f);
-        float rotSpeed = 90.0f * ((rand() / (float)RAND_MAX) - 0.5f); // -30 to +30 deg/sec
-        birds.emplace_back(x, y, z, vx, vy, vz, rotSpeed);
+        BirdData d = spawnBird(minDist, maxDist);
+        birds.emplace_back(d.pos[0], d.pos[1], d.pos[2],
+                           d.velocity[0], d.velocity[1], d.velocity[2],
+                           d.rotSpeed);
     }
 }
 
+
 // Update bird positions and rotations
 void updateBirds(float dt) {
-    const float maxDistFromDrone = 200.0f; // radius around drone
+    const float maxDistFromDrone = 60.0f; // radius around drone
 
     // Speed multiplier after 30 seconds
     int elapsedMs = glutGet(GLUT_ELAPSED_TIME);
@@ -259,70 +322,12 @@ void updateBirds(float dt) {
         float dz = b.pos[2] - drone.pos[2];
         float dist = sqrt(dx*dx + dy*dy + dz*dz);
 		if (dist > maxDistFromDrone) {
-			// Random point on/in spherical shell between minDistFromDrone and maxDistFromDrone
-			const float minDistFromDrone = 200.0f;    // < maxDistFromDrone; tweak as desired
-			const float maxDist = maxDistFromDrone; // keep existing name
-
-			// Random angles for uniform direction on sphere
-			float theta = 2.0f * 3.14159265f * (rand() / (float)RAND_MAX); // azimuthal
-			float cosPhi = 2.0f * (rand() / (float)RAND_MAX) - 1.0f;       // cos(phi) uniform in [-1,1]
-			float sinPhi = sqrtf(1.0f - cosPhi * cosPhi);
-
-			// Choose radius so distribution is uniform in volume of shell (no clustering near outer surface)
-			float u = rand() / (float)RAND_MAX; // in [0,1)
-			float minR3 = minDistFromDrone * minDistFromDrone * minDistFromDrone;
-			float maxR3 = maxDist * maxDist * maxDist;
-			float r_samp = cbrtf(u * (maxR3 - minR3) + minR3);
-
-			// convert spherical -> cartesian, offset by drone.position
-			b.pos[0] = drone.pos[0] + r_samp * sinPhi * cosf(theta);
-			b.pos[1] = drone.pos[1] + r_samp * cosPhi;
-			b.pos[2] = drone.pos[2] + r_samp * sinPhi * sinf(theta);
-
-			// Inward direction with random spread (unchanged)
-			float dir[3] = {
-				drone.pos[0] - b.pos[0],
-				drone.pos[1] - b.pos[1],
-				drone.pos[2] - b.pos[2]
-			};
-            // Normalize direction
-            float len = sqrt(dir[0]*dir[0] + dir[1]*dir[1] + dir[2]*dir[2]);
-            dir[0] /= len; dir[1] /= len; dir[2] /= len;
-
-            // Add random spread (angle up to ~30 degrees)
-            float spreadAngle = 0.5236f; // ~30 degrees in radians
-            float randAngle = (rand() / (float)RAND_MAX) * spreadAngle;
-            float randAxisTheta = 2.0f * 3.14159265f * (rand() / (float)RAND_MAX);
-
-            // Generate a random axis perpendicular to dir
-            float axis[3] = {
-                -dir[1], dir[0], 0
-            };
-            float axisLen = sqrt(axis[0]*axis[0] + axis[1]*axis[1] + axis[2]*axis[2]);
-            if (axisLen > 0.0001f) {
-                axis[0] /= axisLen; axis[1] /= axisLen; axis[2] /= axisLen;
-            } else {
-                axis[0] = 1; axis[1] = 0; axis[2] = 0;
-            }
-
-            // Rodrigues' rotation formula to rotate dir by randAngle around axis
-            float cosA = cos(randAngle);
-            float sinA = sin(randAngle);
-            float dot = dir[0]*axis[0] + dir[1]*axis[1] + dir[2]*axis[2];
-            float newDir[3];
-            newDir[0] = cosA * dir[0] + sinA * (axis[1]*dir[2] - axis[2]*dir[1]) + (1-cosA)*dot*axis[0];
-            newDir[1] = cosA * dir[1] + sinA * (axis[2]*dir[0] - axis[0]*dir[2]) + (1-cosA)*dot*axis[1];
-            newDir[2] = cosA * dir[2] + sinA * (axis[0]*dir[1] - axis[1]*dir[0]) + (1-cosA)*dot*axis[2];
-
-            // Final velocity
-            float speed = 10.0f;
-            b.velocity[0] = speed * newDir[0];
-            b.velocity[1] = speed * newDir[1];
-            b.velocity[2] = speed * newDir[2];
-
-            b.rotation = 0.0f;
-            b.rotSpeed = 90.0f * ((rand() / (float)RAND_MAX) - 0.5f);
-        }
+			BirdData d = spawnBird(30.0f, maxDistFromDrone);
+			b.pos[0] = d.pos[0]; b.pos[1] = d.pos[1]; b.pos[2] = d.pos[2];
+			b.velocity[0] = d.velocity[0]; b.velocity[1] = d.velocity[1]; b.velocity[2] = d.velocity[2];
+			b.rotation = 0.0f;
+			b.rotSpeed = d.rotSpeed;
+		}
 
 		// Calculate collision
 		float dist_x = drone.pos[0] - b.pos[0];
