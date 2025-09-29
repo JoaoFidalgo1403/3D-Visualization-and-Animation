@@ -512,16 +512,16 @@ void applyKeyInputs(float dt) {
 
     // Special keys
     if (specialKeyStates[GLUT_KEY_UP]) {
-        drone.pitch -= 30.0f * dt;
+        drone.pitch -= 60.0f * dt;
     }
     if (specialKeyStates[GLUT_KEY_DOWN]) {
-        drone.pitch += 30.0f * dt;
+        drone.pitch += 60.0f * dt;
     }
     if (specialKeyStates[GLUT_KEY_LEFT]) {
-        drone.roll  -= 30.0f * dt;
+        drone.roll  -= 60.0f * dt;
     }
     if (specialKeyStates[GLUT_KEY_RIGHT]) {
-        drone.roll  += 30.0f * dt;
+        drone.roll  += 60.0f * dt;
     }
 }
 
@@ -1320,7 +1320,6 @@ int main(int argc, char **argv) {
 	if(!renderer.setRenderMeshesShaderProg("shaders/mesh.vert", "shaders/mesh.frag") || 
 		!renderer.setRenderTextShaderProg("shaders/ttf.vert", "shaders/ttf.frag"))
 	return(1);
-
 
 	// after successful creation/link of the mesh program:
 	//renderer.cacheLightUniformLocations();
