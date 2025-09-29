@@ -244,7 +244,7 @@ void main() {
     }
 
     // Apply fog at the very end of main()
-    vec3 fogColor = vec3(1, 0.6, 0.3); // orange-y fog
+    vec3 fogColor = vec3(0.35, 0.18, 0.08); // #5a2e14
     float fogDensity = 0.02;
     float dist = length(DataIn.eye);  // eye-space distance to camera
     float fogFactor = exp(-pow(fogDensity * dist, 2.0));

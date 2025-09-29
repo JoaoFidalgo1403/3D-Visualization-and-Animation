@@ -410,7 +410,7 @@ void handleCollisions() {
 	AABB droneBox = computeDroneAABB();
 
 	// Check against ground (y = -1.15f)
-	if (droneBox.minY <= -1.15f) {
+	if (droneBox.minY <= 0.0f) {
 		std::cout << "Collision with ground\n";
 		drone.collisionVel[1] = - drone.velocity[1] * 2.0f;
 		return;
@@ -1009,7 +1009,7 @@ void renderSim(void) {
 
 	// Draw the terrain - myMeshes[6] contains the Quad object
 	mu.pushMatrix(gmu::MODEL);
-	mu.translate(gmu::MODEL, 0.0f, -1.15f, 0.0f);
+	mu.translate(gmu::MODEL, 0.0f, 0.0f, 0.0f);
 	mu.scale(gmu::MODEL, 30.0f, 0.1f, 30.0f);
 	mu.rotate(gmu::MODEL, -90.0f, 1.0f, 0.0f, 0.0f); // Rotate quad from XY to XZ plane
 
