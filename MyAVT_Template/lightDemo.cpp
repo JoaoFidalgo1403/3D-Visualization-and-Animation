@@ -63,8 +63,8 @@ enum CameraMode { FOLLOW, THIRD, TOP_ORTHO, TOP_PERSPECTIVE };
 CameraMode cameraMode = THIRD;
 
 // Third-person/orbit camera parameters (tweak to taste)
-float camOrbitRadius    = 15.0f;   // distance from drone
-float camOrbitHeight    = 6.0f;    // vertical offset above drone
+float camOrbitRadius    = 7.5f;   // distance from drone
+float camOrbitHeight    = 3.0f;    // vertical offset above drone
 float camOrbitSpeed     = 0.8f;    // radians per second (positive = orbit CCW)
 float camOrbitAngle     = 3.14159265f;    // current angle (radians)
 float camOrbitLookHeight = 1.5f;   // where camera looks relative to drone.y
@@ -78,9 +78,9 @@ const float CAM_ORBIT_MIN_HEIGHT = 1.0f;
 const float CAM_ORBIT_MAX_HEIGHT = 80.0f;
 
 // Drone Scale
-const float DRONE_WIDTH = 1.25f;
-const float DRONE_DEPTH = 0.75f;
-const float DRONE_HEIGHT = 0.15f;
+const float DRONE_WIDTH = 1.25f/2.0f;
+const float DRONE_DEPTH = 0.75f/2.0f;
+const float DRONE_HEIGHT = 0.15f/2.0f;
 
 // Buildings Scale
 const float BUILDING_WIDTH = 10.0f;
@@ -741,19 +741,19 @@ void drawDrone(dataMesh &data) {
 			data.meshID = 3;
 		}
 		mu.pushMatrix(gmu::MODEL);
-		mu.translate(gmu::MODEL, drone_parts_position[i].x, drone_parts_position[i].y, drone_parts_position[i].z);
+		mu.translate(gmu::MODEL, drone_parts_position[i].x / 2.0f, drone_parts_position[i].y / 2.0f, drone_parts_position[i].z / 2.0f);
 		if (i == 0) {
 			mu.scale(gmu::MODEL, DRONE_WIDTH, DRONE_HEIGHT, DRONE_DEPTH);
 		} else if (i > 0 && i < 3) {
-			mu.scale(gmu::MODEL, 0.5f, 0.05f, 0.5f);
+			mu.scale(gmu::MODEL, 0.25f, 0.0025f, 0.25f);
 		} else {
-			mu.scale(gmu::MODEL, 0.625f, 0.05f, 0.625f);
+			mu.scale(gmu::MODEL, 0.3125f, 0.025f, 0.3125f);
 		}
 
 		mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
 		mu.computeNormalMatrix3x3();
 
-		data.texMode = 2;   //modulate diffuse color with texel color
+		data.texMode = 4;   //modulate diffuse color with texel color
 		data.vm = mu.get(gmu::VIEW_MODEL),
 		data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
 		data.normal = mu.getNormalMatrix();
@@ -833,7 +833,6 @@ void renderSim(void) {
 	renderer.activateRenderMeshesShaderProg(); // use the required GLSL program to draw the meshes with illumination
 	
 	//Associar os Texture Units aos Objects Texture
-	//stone.tga loaded in TU0; checker.tga loaded in TU1;  lightwood.tga loaded in TU2
 	renderer.setTexUnit(0, 0);
 	renderer.setTexUnit(1, 1);
 	renderer.setTexUnit(2, 2);
@@ -928,7 +927,7 @@ void renderSim(void) {
 	// prepare 3-component arrays for the renderer API
 	float dirEye3[3] = { dAux[0], dAux[1], dAux[2] };
 	float dirAmb[3]  = { 0.05f, 0.05f, 0.05f };
-	float sunIntensity = 4.0f; // 1.0 = same, 2.0 = twice as bright
+	float sunIntensity = 1.5f; // 1.0 = same, 2.0 = twice as bright
 	float dirDiff[3] = { 0.40f * sunIntensity, 0.40f * sunIntensity, 0.40f * sunIntensity };
 	float dirSpec[3] = { 0.70f * sunIntensity, 0.70f * sunIntensity, 0.70f * sunIntensity };
 
@@ -962,7 +961,7 @@ void renderSim(void) {
 	    mu.multMatrixPoint(gmu::VIEW, pointLightPos[i], pAux4); // world->eye
 	    float pEye3[3] = { pAux4[0], pAux4[1], pAux4[2] };
 
-		float intensity = 3.0f;
+		float intensity = 10.0f;
 
 	    float pAmb[3]  = { 0.02f, 0.02f, 0.02f };
 	    float pDiff[3] = { 0.60f * intensity, 0.50f * intensity, 0.40f * intensity};
@@ -1020,7 +1019,7 @@ void renderSim(void) {
 	dataMesh data;
 
 	data.meshID = 6; // For the terrain (last mesh)
-	data.texMode = 3; // any value not 0,1,2 will take the "two-texture" path in your mesh.frag
+	data.texMode = 5; // "two-texture" path in mesh.frag
 	data.vm = mu.get(gmu::VIEW_MODEL),
 	data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
 	data.normal = mu.getNormalMatrix();
@@ -1054,7 +1053,7 @@ void renderSim(void) {
 			mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
 			mu.computeNormalMatrix3x3();
 
-			data.texMode = 2;   //modulate diffuse color with texel color
+			data.texMode = 1;   //modulate diffuse color with texel color
 			data.vm = mu.get(gmu::VIEW_MODEL),
 			data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
 			data.normal = mu.getNormalMatrix();
@@ -1130,12 +1129,11 @@ void renderSim(void) {
 
 void buildScene()
 {
-	//Texture Object definition~
+	//Texture Object definition
 	renderer.TexObjArray.texture2D_Loader("assets/building.jpg");
 	renderer.TexObjArray.texture2D_Loader("assets/marstex.jpg");
 	renderer.TexObjArray.texture2D_Loader("assets/noise2.jpg");
-	renderer.TexObjArray.texture2D_Loader("assets/noise.jpg");
-
+	renderer.TexObjArray.texture2D_Loader("assets/drone.jpg");
 
 
 	//Scene geometry with triangle meshes

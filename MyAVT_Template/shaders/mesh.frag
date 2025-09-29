@@ -213,16 +213,24 @@ void main() {
         // no texturing: result already includes material ambient/diffuse/specular
         colorOut = vec4(clamp(result + mat.emissive.rgb, 0.0, 1.0), 1.0);
     } else if (texMode == 1) {
-        vec3 texel = texture(texmap2, DataIn.tex_coord).rgb;
+        vec3 texel = texture(texmap, DataIn.tex_coord).rgb;
         // modulate final lighting by texel (approximation of original behavior)
         vec3 outc = clamp(result * texel + 0.07 * texel, 0.0, 1.0);
         colorOut = vec4(outc, 1.0);
     } else if (texMode == 2) {
-        vec3 texel = texture(texmap, DataIn.tex_coord).rgb;
+        vec3 texel = texture(texmap1, DataIn.tex_coord).rgb;
+        vec3 outc = clamp(result * texel + 0.07 * texel, 0.0, 1.0);
+        colorOut = vec4(outc, 1.0);
+    } else if (texMode == 3) {
+        vec3 texel = texture(texmap2, DataIn.tex_coord).rgb;
+        vec3 outc = clamp(result * texel + 0.07 * texel, 0.0, 1.0);
+        colorOut = vec4(outc, 1.0);
+     } else if (texMode == 4) {
+        vec3 texel = texture(texmap3, DataIn.tex_coord).rgb;
         vec3 outc = clamp(result * texel + 0.07 * texel, 0.0, 1.0);
         colorOut = vec4(outc, 1.0);
     } else {
-         vec2 tiledTC1 = DataIn.tex_coord * terrainTile1;
+        vec2 tiledTC1 = DataIn.tex_coord * terrainTile1;
         vec2 tiledTC2 = DataIn.tex_coord * terrainTile2;
         vec3 texel = texture(texmap2, tiledTC2).rgb;
         vec3 texel1 = texture(texmap1, tiledTC1).rgb;
