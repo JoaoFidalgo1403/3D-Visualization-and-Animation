@@ -351,9 +351,9 @@ void updateBirds(float dt) {
 
 AABB computeDroneAABB() {
     AABB box;
-    float halfWidth = DRONE_WIDTH / 2.0f;
+    float halfWidth = DRONE_WIDTH / 2.0f + 0.1f;
     float halfHeight = DRONE_HEIGHT / 2.0f;
-    float halfDepth = DRONE_DEPTH / 2.0f;
+    float halfDepth = DRONE_DEPTH / 2.0f + 0.1f;
 
     // Center at drone.pos
     box.minX = drone.pos[0] - halfWidth;
