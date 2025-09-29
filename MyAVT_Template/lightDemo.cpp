@@ -1321,6 +1321,7 @@ int main(int argc, char **argv) {
 		!renderer.setRenderTextShaderProg("shaders/ttf.vert", "shaders/ttf.frag"))
 	return(1);
 
+
 	// after successful creation/link of the mesh program:
 	//renderer.cacheLightUniformLocations();
 

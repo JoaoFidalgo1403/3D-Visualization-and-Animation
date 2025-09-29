@@ -1,5 +1,10 @@
 #version 430
 
+// ---------- Fog ----------
+uniform vec3 fogColor;
+uniform float fogStart;  // distance where fog starts
+uniform float fogEnd;    // distance where fog is full
+
 // ---------- Material ----------
 struct Materials {
     vec4 diffuse;
@@ -237,6 +242,15 @@ void main() {
         vec3 outc = clamp(result * texel * texel1 + 0.07 * texel * texel1, 0.0, 1.0);
         colorOut = vec4(outc, 1.0);
     }
+
+    // Apply fog at the very end of main()
+    vec3 fogColor = vec3(1, 0.6, 0.3); // light gray-blue fog
+    float fogDensity = 0.02;
+    float dist = length(DataIn.eye);  // eye-space distance to camera
+    float fogFactor = exp(-pow(fogDensity * dist, 2.0));
+    fogFactor = clamp(fogFactor, 0.0, 1.0);
+
+    colorOut.rgb = mix(fogColor, colorOut.rgb, fogFactor);
 
     return;
 }
