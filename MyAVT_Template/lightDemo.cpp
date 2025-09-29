@@ -53,6 +53,10 @@ float camX, camY, camZ;
 float alpha = 57.0f, beta = 18.0f;
 float r = 45.0f;
 
+// Key states arrays
+bool keyStates[256] = { false };
+bool specialKeyStates[256] = { false };
+
 
 // Camera modes
 enum CameraMode { FOLLOW, THIRD, TOP_ORTHO, TOP_PERSPECTIVE };
@@ -488,6 +492,220 @@ void updateDroneState(float dt) {
 
 // ------------------------------------------------------------
 //
+// Events from the Keyboard
+//
+
+void applyKeyInputs(float dt) {
+    // Normal keys
+    if (keyStates['w'] || keyStates['W']) {
+        drone.throttle +=  15.0f * dt;  // accelerate upward
+    }
+    if (keyStates['s'] || keyStates['S']) {
+        drone.throttle -=  15.0f * dt;
+    }
+    if (keyStates['a'] || keyStates['A']) {
+        drone.yaw += 60.0f * dt; // continuous yaw left
+    }
+    if (keyStates['d'] || keyStates['D']) {
+        drone.yaw -= 60.0f * dt; // continuous yaw right
+    }
+
+    // Special keys
+    if (specialKeyStates[GLUT_KEY_UP]) {
+        drone.pitch -= 30.0f * dt;
+    }
+    if (specialKeyStates[GLUT_KEY_DOWN]) {
+        drone.pitch += 30.0f * dt;
+    }
+    if (specialKeyStates[GLUT_KEY_LEFT]) {
+        drone.roll  -= 30.0f * dt;
+    }
+    if (specialKeyStates[GLUT_KEY_RIGHT]) {
+        drone.roll  += 30.0f * dt;
+    }
+}
+
+void processKeysDown(unsigned char key, int xx, int yy) {
+	keyStates[key] = true;
+
+    switch (key) {
+        case 27: glutLeaveMainLoop(); break;
+        case 'c':
+            printf("Camera Spherical Coordinates (%f, %f, %f)\n", alpha, beta, r);
+            break;
+        case 'l':
+            spotlight_mode = !spotlight_mode;
+            printf("Spotlight toggled: %d\n", spotlight_mode);
+            break;
+        case 'r':
+            alpha = 57.0f; beta = 18.0f; r = 45.0f;
+            camX = r * sin(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
+            camZ = r * cos(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
+            camY = r * sin(beta * 3.14f / 180.0f);
+            drone = Drone(); // reset drone state
+            break;
+        case 'm': glEnable(GL_MULTISAMPLE); break;
+        case 'n': glDisable(GL_MULTISAMPLE); break;
+        case '1': cameraMode = THIRD; printf("Camera mode: THIRD PERSON ORBIT\n"); break;
+        case '2': cameraMode = TOP_ORTHO; printf("Camera mode: TOP ORTHO\n"); break;
+        case '3': cameraMode = TOP_PERSPECTIVE; printf("Camera mode: TOP PERSPECTIVE\n"); break;
+        case '4': cameraMode = FOLLOW; printf("Camera mode: FOLLOW\n"); break;
+    }
+}
+
+void processKeysUp(unsigned char key, int xx, int yy) {
+	keyStates[key] = false;
+
+	switch (key) {
+		case 'w': case 'W': case 's': case 'S':
+			drone.throttle = 0.0f; break;
+	}
+}
+
+// ---------------------------
+// Special keys (arrows, F1..F12, etc.)
+// ---------------------------
+void processSpecialKeysDown(int key, int xx, int yy) {
+    specialKeyStates[key] = true;
+}
+
+void processSpecialKeysUp(int key, int xx, int yy) {
+    specialKeyStates[key] = false;
+}
+
+
+// ------------------------------------------------------------
+//
+// Mouse Events
+//
+
+void processMouseButtons(int button, int state, int xx, int yy)
+{
+	// start tracking the mouse
+	if (state == GLUT_DOWN)  {
+		startX = xx;
+		startY = yy;
+		if (button == GLUT_LEFT_BUTTON)
+			tracking = 1;
+		else if (button == GLUT_RIGHT_BUTTON)
+			tracking = 2;
+	}
+
+	//stop tracking the mouse
+	else if (state == GLUT_UP) {
+		if (tracking == 1) {
+			alpha -= (xx - startX);
+			beta += (yy - startY);
+		}
+		else if (tracking == 2) {
+			r += (yy - startY) * 0.01f;
+			if (r < 0.1f)
+				r = 0.1f;
+		}
+		tracking = 0;
+	}
+}
+///////////////////////////////////////////////////////////////////////
+// Print point lights (world coords) and drone world position
+void printPointLightsAndDrone()
+{
+    printf("=== Scene positions (world coords) ===\n");
+    printf("Drone pos: (%.3f, %.3f, %.3f)\n",
+           drone.pos[0], drone.pos[1], drone.pos[2]);
+
+    for (int i = 0; i < NUM_POINT_LIGHTS; ++i) {
+        printf("PointLight[%d] world pos: (%.3f, %.3f, %.3f)\n",
+               i, pointLightPos[i][0], pointLightPos[i][1], pointLightPos[i][2]);
+    }
+    fflush(stdout);
+}
+///////////////////////////////////////////////////////////////////////
+
+// Track mouse motion while buttons are pressed
+
+void processMouseMotion(int xx, int yy)
+	{
+		int deltaX = - xx + startX;
+		int deltaY =    yy - startY;
+
+		// LEFT button dragging
+		if (tracking == 1) {
+			if (cameraMode == THIRD) {
+				// Horizontal drag -> orbit angle (radians)
+				float angleDelta = deltaX * CAM_ORBIT_SENSITIVITY_X;
+				camOrbitAngle += angleDelta;
+
+				// keep angle in [-pi, pi] or [0, 2pi)
+				const float TWO_PI = 6.28318530718f;
+				if (camOrbitAngle >= TWO_PI) camOrbitAngle -= TWO_PI;
+				if (camOrbitAngle < 0.0f) camOrbitAngle += TWO_PI;
+
+				// Vertical drag -> change orbit height
+				float heightDelta = deltaY * CAM_ORBIT_SENSITIVITY_Y;
+				camOrbitHeight += heightDelta;
+				if (camOrbitHeight < CAM_ORBIT_MIN_HEIGHT) camOrbitHeight = CAM_ORBIT_MIN_HEIGHT;
+				if (camOrbitHeight > CAM_ORBIT_MAX_HEIGHT) camOrbitHeight = CAM_ORBIT_MAX_HEIGHT;
+
+				// update start positions for smooth dragging
+				startX = xx;
+				startY = yy;
+
+				// recompute camX/camY/camZ not necessary — renderSim() computes camera from camOrbit* each frame
+				return;
+			}
+
+			// existing "orbit with alpha/beta" behavior for other modes
+			float alphaAux = alpha + (- xx + startX);
+			float betaAux  = beta  + (yy - startY);
+			float rAux = r;
+
+			if (betaAux > 85.0f)
+				betaAux = 85.0f;
+			else if (betaAux < -85.0f)
+				betaAux = -85.0f;
+
+			camX = rAux * sin(alphaAux * 3.14f / 180.0f) * cos(betaAux * 3.14f / 180.0f);
+			camZ = rAux * cos(alphaAux * 3.14f / 180.0f) * cos(betaAux * 3.14f / 180.0f);
+			camY = rAux * sin(betaAux * 3.14f / 180.0f);
+		}
+		// RIGHT button dragging: zoom (keep as before for THIRD as well)
+		else if (tracking == 2) {
+			float alphaAux = alpha;
+			float betaAux = beta;
+			float rAux = r + (deltaY * 0.01f);
+			if (rAux < 0.1f)
+				rAux = 0.1f;
+
+			camX = rAux * sin(alphaAux * 3.14f / 180.0f) * cos(betaAux * 3.14f / 180.0f);
+			camZ = rAux * cos(alphaAux * 3.14f / 180.0f) * cos(betaAux * 3.14f / 180.0f);
+			camY = rAux * sin(betaAux * 3.14f / 180.0f);
+
+			// update start coords so drag is incremental
+			startX = xx;
+			startY = yy;
+		}
+	//  uncomment this if not using an idle or refresh func
+	//	glutPostRedisplay();
+	}
+
+void mouseWheel(int wheel, int direction, int x, int y) {
+
+	r += direction * 0.1f;
+	if (r < 0.1f)
+		r = 0.1f;
+
+	camX = r * sin(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
+	camZ = r * cos(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
+	camY = r *   						     sin(beta * 3.14f / 180.0f);
+
+
+//  uncomment this if not using an idle or refresh func
+//	glutPostRedisplay();
+}
+
+
+// ------------------------------------------------------------
+//
 // Render stuff
 //
 
@@ -860,7 +1078,8 @@ void renderSim(void) {
     int now = glutGet(GLUT_ELAPSED_TIME);
     float dt = (now - lastTime) * 0.001f;
 	lastTime = now;
-    updateDroneState(dt);
+    applyKeyInputs(dt);
+	updateDroneState(dt);
 
 	drawDrone(data);
 	
@@ -902,205 +1121,6 @@ void renderSim(void) {
 	}
 	
 	glutSwapBuffers();
-}
-
-// ------------------------------------------------------------
-//
-// Events from the Keyboard
-//
-
-void processSpecialKeys(int key, int xx, int yy) {
-    switch (key) {
-        case GLUT_KEY_UP:    drone.pitch -=  2.0f; break; // nose down => forward
-        case GLUT_KEY_DOWN:  drone.pitch +=  2.0; break; // nose up => backward
-        case GLUT_KEY_LEFT:  drone.roll  -=  2.0; break; // roll left
-        case GLUT_KEY_RIGHT: drone.roll  +=  2.0; break; // roll right
-    }
-}
-
-
-void processKeysUp(unsigned char key, int xx, int yy)
-{
-	switch(key) {
-		case 'w': drone.throttle =  0.0f; break;
-		case 's': drone.throttle =  0.0f; break;
-	}
-}
-
-
-void processKeys(unsigned char key, int xx, int yy)
-{
-    switch(key) {
-        case 27:
-            glutLeaveMainLoop();
-            break;
-
-        case 'c':
-            printf("Camera Spherical Coordinates (%f, %f, %f)\n", alpha, beta, r);
-            break;
-
-        case 'l':
-            spotlight_mode = !spotlight_mode;
-            printf("Spotlight toggled: %d\n", spotlight_mode);
-            break;
-
-        case 'r':
-            alpha = 57.0f; beta = 18.0f; r = 45.0f;
-            camX = r * sin(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
-            camZ = r * cos(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
-            camY = r * sin(beta * 3.14f / 180.0f);
-			drone = Drone(); // reset drone state
-            break;
-
-        case 'm': glEnable(GL_MULTISAMPLE); break;
-        case 'n': glDisable(GL_MULTISAMPLE); break;
-
-		case '1': cameraMode = THIRD; printf("Camera mode: THIRD PERSON ORBIT\n"); break;
-        case '2': cameraMode = TOP_ORTHO; printf("Camera mode: TOP ORTHO\n"); break;
-        case '3': cameraMode = TOP_PERSPECTIVE; printf("Camera mode: TOP PERSPECTIVE\n"); break;
-		case '4': cameraMode = FOLLOW; printf("Camera mode: FOLLOW\n"); break;
-
-        // throttle: set command so updateDroneState integrates throttle
-        case 'w': drone.throttle +=  1.0f; break;
-        case 's': drone.throttle -=  1.0f; break;
-
-        // yaw commands (continuous while key held)
-        case 'a': drone.yaw +=  2.0f; break;
-        case 'd': drone.yaw -=  2.0f; break;
-
-		// Reset drone movement
-		case ' ': drone.pitch = 0.0f; drone.roll = 0.0f; drone.throttle = 0.0f; drone.yaw = 0.0f; break;
-    }
-}
-
-
-// ------------------------------------------------------------
-//
-// Mouse Events
-//
-
-void processMouseButtons(int button, int state, int xx, int yy)
-{
-	// start tracking the mouse
-	if (state == GLUT_DOWN)  {
-		startX = xx;
-		startY = yy;
-		if (button == GLUT_LEFT_BUTTON)
-			tracking = 1;
-		else if (button == GLUT_RIGHT_BUTTON)
-			tracking = 2;
-	}
-
-	//stop tracking the mouse
-	else if (state == GLUT_UP) {
-		if (tracking == 1) {
-			alpha -= (xx - startX);
-			beta += (yy - startY);
-		}
-		else if (tracking == 2) {
-			r += (yy - startY) * 0.01f;
-			if (r < 0.1f)
-				r = 0.1f;
-		}
-		tracking = 0;
-	}
-}
-///////////////////////////////////////////////////////////////////////
-// Print point lights (world coords) and drone world position
-void printPointLightsAndDrone()
-{
-    printf("=== Scene positions (world coords) ===\n");
-    printf("Drone pos: (%.3f, %.3f, %.3f)\n",
-           drone.pos[0], drone.pos[1], drone.pos[2]);
-
-    for (int i = 0; i < NUM_POINT_LIGHTS; ++i) {
-        printf("PointLight[%d] world pos: (%.3f, %.3f, %.3f)\n",
-               i, pointLightPos[i][0], pointLightPos[i][1], pointLightPos[i][2]);
-    }
-    fflush(stdout);
-}
-///////////////////////////////////////////////////////////////////////
-
-// Track mouse motion while buttons are pressed
-
-void processMouseMotion(int xx, int yy)
-	{
-		int deltaX = - xx + startX;
-		int deltaY =    yy - startY;
-
-		// LEFT button dragging
-		if (tracking == 1) {
-			if (cameraMode == THIRD) {
-				// Horizontal drag -> orbit angle (radians)
-				float angleDelta = deltaX * CAM_ORBIT_SENSITIVITY_X;
-				camOrbitAngle += angleDelta;
-
-				// keep angle in [-pi, pi] or [0, 2pi)
-				const float TWO_PI = 6.28318530718f;
-				if (camOrbitAngle >= TWO_PI) camOrbitAngle -= TWO_PI;
-				if (camOrbitAngle < 0.0f) camOrbitAngle += TWO_PI;
-
-				// Vertical drag -> change orbit height
-				float heightDelta = deltaY * CAM_ORBIT_SENSITIVITY_Y;
-				camOrbitHeight += heightDelta;
-				if (camOrbitHeight < CAM_ORBIT_MIN_HEIGHT) camOrbitHeight = CAM_ORBIT_MIN_HEIGHT;
-				if (camOrbitHeight > CAM_ORBIT_MAX_HEIGHT) camOrbitHeight = CAM_ORBIT_MAX_HEIGHT;
-
-				// update start positions for smooth dragging
-				startX = xx;
-				startY = yy;
-
-				// recompute camX/camY/camZ not necessary — renderSim() computes camera from camOrbit* each frame
-				return;
-			}
-
-			// existing "orbit with alpha/beta" behavior for other modes
-			float alphaAux = alpha + (- xx + startX);
-			float betaAux  = beta  + (yy - startY);
-			float rAux = r;
-
-			if (betaAux > 85.0f)
-				betaAux = 85.0f;
-			else if (betaAux < -85.0f)
-				betaAux = -85.0f;
-
-			camX = rAux * sin(alphaAux * 3.14f / 180.0f) * cos(betaAux * 3.14f / 180.0f);
-			camZ = rAux * cos(alphaAux * 3.14f / 180.0f) * cos(betaAux * 3.14f / 180.0f);
-			camY = rAux * sin(betaAux * 3.14f / 180.0f);
-		}
-		// RIGHT button dragging: zoom (keep as before for THIRD as well)
-		else if (tracking == 2) {
-			float alphaAux = alpha;
-			float betaAux = beta;
-			float rAux = r + (deltaY * 0.01f);
-			if (rAux < 0.1f)
-				rAux = 0.1f;
-
-			camX = rAux * sin(alphaAux * 3.14f / 180.0f) * cos(betaAux * 3.14f / 180.0f);
-			camZ = rAux * cos(alphaAux * 3.14f / 180.0f) * cos(betaAux * 3.14f / 180.0f);
-			camY = rAux * sin(betaAux * 3.14f / 180.0f);
-
-			// update start coords so drag is incremental
-			startX = xx;
-			startY = yy;
-		}
-	//  uncomment this if not using an idle or refresh func
-	//	glutPostRedisplay();
-	}
-
-void mouseWheel(int wheel, int direction, int x, int y) {
-
-	r += direction * 0.1f;
-	if (r < 0.1f)
-		r = 0.1f;
-
-	camX = r * sin(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
-	camZ = r * cos(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
-	camY = r *   						     sin(beta * 3.14f / 180.0f);
-
-
-//  uncomment this if not using an idle or refresh func
-//	glutPostRedisplay();
 }
 
 
@@ -1252,13 +1272,14 @@ int main(int argc, char **argv) {
 	//glutTimerFunc(0, refresh, 0);    //use it to to get 60 FPS whatever
 
 //	Mouse and Keyboard Callbacks
-	glutKeyboardFunc(processKeys);
+	glutKeyboardFunc(processKeysDown);
+	glutKeyboardUpFunc(processKeysUp);
+	glutSpecialFunc(processSpecialKeysDown);
+	glutSpecialUpFunc(processSpecialKeysUp);
+
 	glutMouseFunc(processMouseButtons);
 	glutMotionFunc(processMouseMotion);
 	glutMouseWheelFunc ( mouseWheel ) ;
-
-	glutSpecialFunc(processSpecialKeys);
-	glutKeyboardUpFunc(processKeysUp);
 	
 
 //	return from main loop

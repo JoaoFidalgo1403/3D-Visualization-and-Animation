@@ -1,7 +1,7 @@
 ﻿  lightDemo.cpp
-C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(895,107): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
-C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(895,74): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
-C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(895,57): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
-C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\lightDemo.cpp(895,24): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
-  MyAVT_Template.vcxproj -> C:\Users\joaof\Desktop\AVT_Project\x64\Debug\MyAVT_Template.exe
+C:\Users\tomas\OneDrive\Desktop\University\AVT\Lab_Assignment_1\AVT_Project\MyAVT_Template\lightDemo.cpp(1117,107): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+C:\Users\tomas\OneDrive\Desktop\University\AVT\Lab_Assignment_1\AVT_Project\MyAVT_Template\lightDemo.cpp(1117,74): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+C:\Users\tomas\OneDrive\Desktop\University\AVT\Lab_Assignment_1\AVT_Project\MyAVT_Template\lightDemo.cpp(1117,57): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+C:\Users\tomas\OneDrive\Desktop\University\AVT\Lab_Assignment_1\AVT_Project\MyAVT_Template\lightDemo.cpp(1117,24): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+  MyAVT_Template.vcxproj -> C:\Users\tomas\OneDrive\Desktop\University\AVT\Lab_Assignment_1\AVT_Project\x64\Debug\MyAVT_Template.exe
   0 File(s) copied
