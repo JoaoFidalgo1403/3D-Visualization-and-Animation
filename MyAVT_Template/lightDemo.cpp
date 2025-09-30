@@ -29,6 +29,10 @@
 #include "texture.h"
 #include <algorithm>
 
+#include <vector>
+#include <utility>  // for std::pair
+#include <ctime>    // for seeding rand()
+
 using namespace std;
 
 #define CAPTION "AVT - Lab Assignment 1"
@@ -146,6 +150,7 @@ float coneDir[4] = { 0.0f, -0.0f, -1.0f, 0.0f };
 bool fontLoaded = false;
 
 float cubeHeights[6][6]; // Store heights for each cube
+std::vector<std::pair<int,int>> openAreas;
 
 struct vec3 {
 	float x, y, z;
@@ -429,7 +434,14 @@ void handleCollisions() {
 	for (int i = 0; i < 6; ++i) {
 		if(hasCollided) break;
 		for (int j = 0; j < 6; ++j) {
-			if (i == 3 && j == 4 || (i == 1 || i == 2) && j == 1) continue;
+			bool skip = false;
+			for (auto &p : openAreas) {
+				if (p.first == i && p.second == j) {
+					skip = true;
+					break;
+				}
+			}
+			if (skip || ((i == 1 || i == 2) && j == 1)) continue;
 
 			AABB buildingBox = computeBuildingAABB(i, j);
 			if (checkCollision(droneBox, buildingBox)) {
@@ -791,7 +803,15 @@ void updatePointLightsFromBuildings()
     // Build list of all buildings (i = 0..5, j = 0..5)
     for (int i = 0; i < 6; ++i) {
         for (int j = 0; j < 6; ++j) {
-			if (i == 3 && j == 4 || (i == 1 || i == 2) && j == 1) continue;
+			
+			bool skip = false;
+			for (auto &p : openAreas) {
+				if (p.first == i && p.second == j) {
+					skip = true;
+					break;
+				}
+			}
+			if (skip || ((i == 1 || i == 2) && j == 1)) continue; // skip this iteration
 
             float h = cubeHeights[i][j];
             float x = gridOriginX + i * gridSpacing;
@@ -1049,7 +1069,14 @@ void renderSim(void) {
 	for (int i=0; i<6; ++i) {  // Draw the other objects in the scene (myMeshes[0] to myMeshes[5])
 		for (int j=0; j<6; ++j) {
 
-			if (i == 3 && j == 4 || (i == 1 || i == 2) && j == 1) continue;
+			bool skip = false;
+			for (auto &p : openAreas) {
+				if (p.first == i && p.second == j) {
+					skip = true;
+					break;
+				}
+			}
+			if (skip || ((i == 1 || i == 2) && j == 1)) continue; // skip this iteration
 
 			data.texMode = 0; //no texturing
 			mu.pushMatrix(gmu::MODEL);
@@ -1395,6 +1422,19 @@ int main(int argc, char **argv) {
 		for (int j = 0; j < 6; ++j) {
 			cubeHeights[i][j] = 20.0f + 15.0f * (rand() / (float)RAND_MAX); // random between 5 and 10
 		}
+	}
+
+	srand(static_cast<unsigned>(time(0))); // seed RNG
+
+	for (int i = 0; i < 3; i++) {
+		int x = 1 + rand() % 4;  // 1 to 4
+		int y = 1 + rand() % 4;
+		openAreas.push_back(std::make_pair(x, y));
+	}
+
+	printf("Open areas at:\n");
+	for (const auto& p : openAreas) {
+		printf("(%d, %d)\n", p.first, p.second);
 	}
 
 	updatePointLightsFromBuildings();
