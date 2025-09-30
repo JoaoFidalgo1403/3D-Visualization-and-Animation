@@ -86,6 +86,13 @@ const float DRONE_HEIGHT = 0.15f/2.0f;
 const float BUILDING_WIDTH = 10.0f;
 const float BUILDING_DEPTH = 10.0f;
 
+// Dome parameters
+const float DOME_RADIUS = 100.0f;
+const float DOME_CENTER_X = 35.0f;
+const float DOME_CENTER_Y = 0.0f; // you requested center at y = 0
+const float DOME_CENTER_Z = 35.0f;
+const float DOME_TRANSPARENCY = 0.75f;
+
 // Mouse Tracking Variables
 int startX, startY, tracking = 0;
 
@@ -761,6 +768,7 @@ void drawDrone(dataMesh &data) {
 
 		mu.popMatrix(gmu::MODEL);
 	}
+	mu.popMatrix(gmu::MODEL);
 }
 
 // Place point lights at the top of the N tallest buildings
@@ -1025,11 +1033,9 @@ void renderSim(void) {
 	data.normal = mu.getNormalMatrix();
 
 	// set terrain tiling
-	GLint currProg = 0;
-	glGetIntegerv(GL_CURRENT_PROGRAM, &currProg);
-	if (currProg != 0) {
-		GLint loc_tile1 = glGetUniformLocation(currProg, "terrainTile1");
-		GLint loc_tile2 = glGetUniformLocation(currProg, "terrainTile2");
+	if (prog != 0) {
+		GLint loc_tile1 = glGetUniformLocation(prog, "terrainTile1");
+		GLint loc_tile2 = glGetUniformLocation(prog, "terrainTile2");
 		if (loc_tile1 >= 0) glUniform2f(loc_tile1, 64.0f, 64.0f);
 		if (loc_tile2 >= 0) glUniform2f(loc_tile2, 32.0f, 32.0f);
 
@@ -1081,7 +1087,84 @@ void renderSim(void) {
 	updateDroneState(dt);
 
 	drawDrone(data);
-	
+
+	// put this after drawDrone(data) and before text rendering
+	renderer.activateRenderMeshesShaderProg(); // ensure shader bound
+
+	// configure translucency
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glDepthMask(GL_FALSE); // don't write to depth buffer for translucent objects
+
+	// Decide whether to render inner faces (if camera inside) or outer faces.
+	// (Optional: compute camera world pos depending on cameraMode — here is a simple approximation)
+	float camWX=0.f, camWY=0.f, camWZ=0.f;
+	if (cameraMode == THIRD) {
+		const float DEG2RAD = 3.14159265f / 180.0f;
+		float yawRad = drone.yaw * DEG2RAD;
+		// use camOrbitAngle / camOrbitRadius from your code
+		float finalAngle = camOrbitAngle - (camOrbitFollowYaw ? yawRad : 0.0f);
+		float ox = camOrbitRadius * cosf(finalAngle);
+		float oz = camOrbitRadius * sinf(finalAngle);
+		camWX = drone.pos[0] + ox;
+		camWY = drone.pos[1] + camOrbitHeight;
+		camWZ = drone.pos[2] + oz;
+	} else if (cameraMode == FOLLOW) {
+		camWX = drone.pos[0] + camX;
+		camWY = drone.pos[1] + camY;
+		camWZ = drone.pos[2] + camZ;
+	} else { // TOP modes: approximate
+		camWX = 0.0f; camWY = 50.0f; camWZ = 0.0f;
+	}
+
+	// camera distance test
+	float dx = camWX - DOME_CENTER_X;
+	float dy = camWY - DOME_CENTER_Y;
+	float dz = camWZ - DOME_CENTER_Z;
+	float camDist = sqrtf(dx*dx + dy*dy + dz*dz);
+	bool cameraInside = (camDist < DOME_RADIUS);
+
+	// set culling to draw appropriate faces
+	glEnable(GL_CULL_FACE);
+	if (cameraInside) {
+		glCullFace(GL_FRONT); // draw back faces so inner surface is visible
+	} else {
+		glCullFace(GL_BACK);  // draw front faces (normal outer view)
+	}
+
+	// transform + render dome (meshID 2 in your buildScene)
+	mu.pushMatrix(gmu::MODEL);
+	mu.translate(gmu::MODEL, DOME_CENTER_X, DOME_CENTER_Y, DOME_CENTER_Z);
+	mu.scale(gmu::MODEL, DOME_RADIUS, DOME_RADIUS, DOME_RADIUS);
+	mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+	mu.computeNormalMatrix3x3();
+
+	data.meshID = 2;  
+	data.texMode = 0;  
+	data.vm  = mu.get(gmu::VIEW_MODEL);
+	data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+	data.normal = mu.getNormalMatrix();
+
+	// set alpha uniform (make sure mesh.frag has 'uniform float uAlpha;')
+	GLint progID = 0;
+	glGetIntegerv(GL_CURRENT_PROGRAM, &progID);
+	if (progID != 0) {
+		GLint loc_uAlpha = glGetUniformLocation(progID, "uAlpha");
+		if (loc_uAlpha >= 0) glUniform1f(loc_uAlpha, DOME_TRANSPARENCY); // 0.0 = fully transparent, 1.0 = opaque
+	}
+
+	// actually draw it
+	renderer.renderMesh(data);
+	mu.popMatrix(gmu::MODEL);
+
+	// restore GL state
+	glDepthMask(GL_TRUE);
+	glDisable(GL_BLEND);
+	glCullFace(GL_BACK); // restore default
+	if (progID != 0) {
+		GLint loc_uAlpha = glGetUniformLocation(progID, "uAlpha");
+		if (loc_uAlpha >= 0) glUniform1f(loc_uAlpha, 1.0f); // reset alpha
+	}
 
 	//Render text (bitmap fonts) in screen coordinates. So use ortoghonal projection with viewport coordinates.
 	//Each glyph quad texture needs just one byte color channel: 0 in background and 1 for the actual character pixels. Use it for alpha blending
