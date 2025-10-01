@@ -322,7 +322,7 @@ void updateBirds(float dt) {
 
     // Speed multiplier after 30 seconds
     int elapsedMs = glutGet(GLUT_ELAPSED_TIME);
-    float speedMultiplier = (elapsedMs > 30000) ? 2.0f : 1.0f;
+    float speedMultiplier = (elapsedMs > 30000) ? 1.3f : 1.0f;
 
     for (auto& b : birds) {
         // Update position and rotation
@@ -733,7 +733,7 @@ void drawBirds(dataMesh& data) {
         mu.pushMatrix(gmu::MODEL);
         mu.translate(gmu::MODEL, b.pos[0], b.pos[1], b.pos[2]);
         mu.rotate(gmu::MODEL, b.rotation, 0, 1, 0); // Rotate around Y axis
-        mu.scale(gmu::MODEL, 0.4f, 0.4f, 0.4f); // Sphere size
+        mu.scale(gmu::MODEL, 1.0f, 0.5f, 1.0f); // Sphere size
         mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
         mu.computeNormalMatrix3x3();
         data.texMode = 0;
@@ -883,7 +883,7 @@ void renderSim(void) {
 				// Compose final orbit angle as: drone yaw (in radians) + user offset (camOrbitAngle)
 				const float DEG2RAD = 3.14159265f / 180.0f;
 				float yawRad = drone.yaw * DEG2RAD;
-				// inside THIRD case, before computing finalAngle
+
 				static float smoothYaw = 0.0f;
 				const float smoothFactor = 0.08f; // larger = snappier, smaller = smoother
 				smoothYaw = smoothYaw + (yawRad - smoothYaw) * smoothFactor;
@@ -914,16 +914,16 @@ void renderSim(void) {
 
 
 		case TOP_ORTHO:
-			mu.lookAt(0, 50, 0, 
-					  0, 0,  0, 
+			mu.lookAt(35, 50, 35, 
+					  35, 0,  35, 
 					  0, 0, -1);
 			mu.loadIdentity(gmu::PROJECTION);
-			mu.ortho(-30, 30, -30, 30, -100, 100);
+			mu.ortho(-100, 100, -100, 100, -100, 100);
 			break;
 		
 		case TOP_PERSPECTIVE:
-			mu.lookAt(0, 50, 0, 
-					  0, 0,  0, 
+			mu.lookAt(35, 150, 35, 
+					  35, 0,  35, 
 					  0, 0, -1);
 			mu.loadIdentity(gmu::PROJECTION);
 			mu.perspective(53.13f, (1.0f * WinX) / WinY, 0.1f, 1000.0f);
