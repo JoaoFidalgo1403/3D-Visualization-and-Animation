@@ -93,7 +93,7 @@ const float BUILDING_DEPTH = 10.0f;
 // Dome parameters
 const float DOME_RADIUS = 100.0f;
 const float DOME_CENTER_X = 35.0f;
-const float DOME_CENTER_Y = 0.0f; // you requested center at y = 0
+const float DOME_CENTER_Y = 0.0f;
 const float DOME_CENTER_Z = 35.0f;
 const float DOME_TRANSPARENCY = 0.75f;
 
@@ -107,7 +107,7 @@ char s[32];
 float lightPos[4] = {4.0f, 15.0f, 2.0f, 1.0f};
 
 // Directional light
-float dirLightDir[4] = { -0.2f, -1.0f, -0.3f, 0.0f }; // w=0 for direction
+float dirLightDir[4] = { -0.2f, -1.0f, -0.3f, 0.0f }; // directional light (w=0)
 
 // -- Light counts (single place to change) --
 #define NUM_POINT_LIGHTS 7
@@ -332,7 +332,6 @@ void updateBirds(float dt) {
         if (b.rotation > 360.0f) b.rotation -= 360.0f;
         if (b.rotation < 0.0f) b.rotation += 360.0f;
 
-        // If too far from drone, respawn at random position/direction on sphere surface
         float dx = b.pos[0] - drone.pos[0];
         float dy = b.pos[1] - drone.pos[1];
         float dz = b.pos[2] - drone.pos[2];
@@ -729,7 +728,7 @@ void mouseWheel(int wheel, int direction, int x, int y) {
 //
 
 void drawBirds(dataMesh& data) {
-    data.meshID = 2; // Sphere mesh
+    data.meshID = 0; // Sphere mesh
     for (const auto& b : birds) {
         mu.pushMatrix(gmu::MODEL);
         mu.translate(gmu::MODEL, b.pos[0], b.pos[1], b.pos[2]);
@@ -1255,7 +1254,7 @@ void buildScene()
 	float spec[] = { 0.8f, 0.8f, 0.8f, 1.0f };
 
 	float amb1[]  = { 0.20f, 0.20f, 0.20f, 1.0f };
-	float diff1[] = { 0.60f, 0.60f, 0.60f, 1.0f }; // main visible color = grey
+	float diff1[] = { 0.60f, 0.60f, 0.60f, 1.0f };
 	float spec1[] = { 0.30f, 0.30f, 0.30f, 1.0f };
 
 	float emissive[] = { 0.0f, 0.0f, 0.0f, 1.0f };
@@ -1377,7 +1376,7 @@ int main(int argc, char **argv) {
 
 	glutTimerFunc(0, timer, 0);
 	glutIdleFunc(renderSim);  // Use it for maximum performance
-	//glutTimerFunc(0, refresh, 0);    //use it to to get 60 FPS whatever
+	//glutTimerFunc(0, refresh, 0);    //use it to to get 60 FPS
 
 //	Mouse and Keyboard Callbacks
 	glutKeyboardFunc(processKeysDown);
@@ -1448,7 +1447,7 @@ int main(int argc, char **argv) {
 	//renderer.cacheLightUniformLocations();
 
 	// Initialize birds
-	initBirds(100); // Create 100 birds
+	initBirds(30);
 
 	//  GLUT main loop
 	glutMainLoop();
