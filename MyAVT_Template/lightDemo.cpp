@@ -75,7 +75,6 @@ float camOrbitLookHeight = 1.5f;   // where camera looks relative to drone.y
 bool camOrbitFollowYaw = true; // camera rotates with drone yaw (child-like)
 
 // Orbit control
-bool camOrbitAuto = false;         // if true, orbit auto-rotates; we want mouse control, so default false
 const float CAM_ORBIT_SENSITIVITY_X = -0.01f; // radians per pixel horizontal
 const float CAM_ORBIT_SENSITIVITY_Y = 0.05f; // world units per pixel vertical
 const float CAM_ORBIT_MIN_HEIGHT = 1.0f;
@@ -207,16 +206,6 @@ void timer(int value)
     FrameCount = 0;
     glutTimerFunc(1000, timer, 0);
 }
-
-void refresh(int value)
-{
-	//PUT YOUR CODE HERE
-}
-
-// ------------------------------------------------------------
-//
-// Reshape Callback Function
-//
 
 void changeSize(int w, int h) {
 
@@ -420,7 +409,7 @@ void computeNormalAfterCollision(float buildingPos[3]) {
 void handleCollisions() {	
 	AABB droneBox = computeDroneAABB();
 
-	// Check against ground (y = -1.15f)
+	// Check against ground (y = 0.0f)
 	if (droneBox.minY <= 0.0f) {
 		std::cout << "Collision with ground\n";
 		drone.collisionVel[1] = - drone.velocity[1] * 2.0f;
@@ -516,16 +505,16 @@ void updateDroneState(float dt) {
 void applyKeyInputs(float dt) {
     // Normal keys
     if (keyStates['w'] || keyStates['W']) {
-        drone.throttle +=  15.0f * dt;  // accelerate upward
+        drone.throttle +=  15.0f * dt;
     }
     if (keyStates['s'] || keyStates['S']) {
         drone.throttle -=  15.0f * dt;
     }
     if (keyStates['a'] || keyStates['A']) {
-        drone.yaw += 60.0f * dt; // continuous yaw left
+        drone.yaw += 60.0f * dt;
     }
     if (keyStates['d'] || keyStates['D']) {
-        drone.yaw -= 60.0f * dt; // continuous yaw right
+        drone.yaw -= 60.0f * dt;
     }
 
     // Special keys
@@ -580,9 +569,6 @@ void processKeysUp(unsigned char key, int xx, int yy) {
 	}
 }
 
-// ---------------------------
-// Special keys (arrows, F1..F12, etc.)
-// ---------------------------
 void processSpecialKeysDown(int key, int xx, int yy) {
     specialKeyStates[key] = true;
 }
@@ -653,7 +639,7 @@ void processMouseMotion(int xx, int yy)
 				float angleDelta = deltaX * CAM_ORBIT_SENSITIVITY_X;
 				camOrbitAngle += angleDelta;
 
-				// keep angle in [-pi, pi] or [0, 2pi)
+				// keep angle in [-pi, pi] or [0, 2pi]
 				const float TWO_PI = 6.28318530718f;
 				if (camOrbitAngle >= TWO_PI) camOrbitAngle -= TWO_PI;
 				if (camOrbitAngle < 0.0f) camOrbitAngle += TWO_PI;
@@ -715,10 +701,6 @@ void mouseWheel(int wheel, int direction, int x, int y) {
 	camX = r * sin(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
 	camZ = r * cos(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
 	camY = r *   						     sin(beta * 3.14f / 180.0f);
-
-
-//  uncomment this if not using an idle or refresh func
-//	glutPostRedisplay();
 }
 
 
@@ -789,17 +771,14 @@ void updatePointLightsFromBuildings()
     std::vector<B> list;
     list.reserve(6*6);
 
-    // Grid origin & spacing must match the transforms you use when drawing the cubes:
-    // translate(..., -20.0f + i * 20.0f, 0.0f, -20.0f + j * 20.0f);
     const float gridOriginX = -20.0f;
     const float gridOriginZ = -20.0f;
     const float gridSpacing   = 20.0f;
 
-	// These are the per-cube scale values you use when drawing:
     const float cubeWidth  = 10.0f; // scale X
     const float cubeDepth  = 10.0f; // scale Z
 
-    // Build list of all buildings (i = 0..5, j = 0..5)
+    // Build list of all buildings
     for (int i = 0; i < 6; ++i) {
         for (int j = 0; j < 6; ++j) {
 			
@@ -824,14 +803,14 @@ void updatePointLightsFromBuildings()
         return a.h > b.h;
     });
 
-    // How much above the roof to place the light (tweakable)
+    // How much above the roof to place the light
     const float roofOffset = 1.0f;
 
     // If your cube mesh's base is at y=0 instead, use y = h + roofOffset.
     for (int k = 0; k < NUM_POINT_LIGHTS - 1; ++k) {
         if (k < (int)list.size()) {
             const B &b = list[k];
-            float topY = b.h + roofOffset;   // <-- change to (b.h + roofOffset) if base-at-0
+            float topY = b.h + roofOffset;
             pointLightPos[k][0] = b.x + cubeWidth / 2.0f; // center of cube in X
             pointLightPos[k][1] = topY;
             pointLightPos[k][2] = b.z + cubeDepth / 2.0f; // center of cube in Z
@@ -859,7 +838,7 @@ void renderSim(void) {
 
 	renderer.activateRenderMeshesShaderProg(); // use the required GLSL program to draw the meshes with illumination
 	
-	//Associar os Texture Units aos Objects Texture
+	//Associate Texture Units to Objects Texture
 	renderer.setTexUnit(0, 0);
 	renderer.setTexUnit(1, 1);
 	renderer.setTexUnit(2, 2);
@@ -872,14 +851,6 @@ void renderSim(void) {
 	switch (cameraMode) {
 		case THIRD:
 			{
-				// optionally advance orbit angle (only if auto is enabled)
-				if (camOrbitAuto) {
-					camOrbitAngle += camOrbitSpeed * frameDt;
-					const float TWO_PI = 6.28318530718f;
-					if (camOrbitAngle >= TWO_PI) camOrbitAngle -= TWO_PI;
-					if (camOrbitAngle < 0.0f) camOrbitAngle += TWO_PI;
-				}
-
 				// Compose final orbit angle as: drone yaw (in radians) + user offset (camOrbitAngle)
 				const float DEG2RAD = 3.14159265f / 180.0f;
 				float yawRad = drone.yaw * DEG2RAD;
@@ -937,9 +908,6 @@ void renderSim(void) {
 			mu.perspective(53.13f, (1.0f * WinX) / WinY, 0.1f, 1000.0f);
 			break;
 	}
-
-	//send the light position in eye coordinates
-	//renderer.setLightPos(lightPos); //efeito capacete do mineiro, ou seja lighPos foi definido em eye coord 
 
 	float lposAux[4];
 	mu.multMatrixPoint(gmu::VIEW, lightPos, lposAux);   //lightPos definido em World Coord so is converted to eye space
@@ -1442,9 +1410,6 @@ int main(int argc, char **argv) {
 	if(!renderer.setRenderMeshesShaderProg("shaders/mesh.vert", "shaders/mesh.frag") || 
 		!renderer.setRenderTextShaderProg("shaders/ttf.vert", "shaders/ttf.frag"))
 	return(1);
-
-	// after successful creation/link of the mesh program:
-	//renderer.cacheLightUniformLocations();
 
 	// Initialize birds
 	initBirds(30);
