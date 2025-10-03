@@ -150,50 +150,43 @@ void main() {
     vec3 viewDir = normalize(DataIn.eye); // eye-space view vector (from frag toward eye at origin)
     vec3 fragPos = DataIn.fragPos;
 
-    // Legacy single spotlight path (keeps old behaviour when spotlight_mode toggled)
+    // Legacy single-spotlight path (keeps old behaviour when spotlight_mode toggled)
     if (spotlight_mode) {
-        // original spotlight-only code approximate
-        vec3 l = normalize(DataIn.lightDir);
-        vec3 sd = normalize(coneDir.xyz);
+        // Use only the spotLights[] array (ignore dir + point lights)
+        vec3 result = vec3(0.0);
 
-        float att = 0.0;
-        float spotExp = 60.0;
-        vec4 spec = vec4(0.0);
-        float intensity = 0.0;
-
-        float spotCos = dot(-l, sd);
-        if (spotCos > spotCosCutOff) {
-            att = pow(spotCos, spotExp);
-            intensity = max(dot(n, l), 0.0) * att;
-            if (intensity > 0.0) {
-                vec3 h = normalize(l + viewDir);
-                float intSpec = max(dot(h, n), 0.0);
-                spec = mat.specular * pow(intSpec, mat.shininess) * att;
-            }
+        int scount = (numSpotLights > 0) ? numSpotLights : 4;
+        scount = min(scount, 4);
+        for (int i = 0; i < scount; ++i) {
+            result += CalcSpotLight(spotLights[i], n, fragPos, viewDir);
         }
 
-        // apply textures / modes similar to original behaviour
+        // Compose final color depending on texturing mode (use `result` as lighting)
         if (texMode == 0) {
-            vec3 lighting = intensity * mat.diffuse.rgb + spec.rgb;
-            vec3 outc = max(lighting, mat.ambient.rgb);
-            colorOut = vec4(outc, uAlpha);
+            // no texturing
+            colorOut = vec4(clamp(result + mat.emissive.rgb, 0.0, 1.0), uAlpha);
         } else if (texMode == 1) {
-            vec3 texel = texture(texmap2, DataIn.tex_coord).rgb;
-            vec3 lighting = intensity * mat.diffuse.rgb * texel + spec.rgb;
-            vec3 outc = max(lighting, 0.07 * texel);
+            vec3 texel = texture(texmap, DataIn.tex_coord).rgb;
+            vec3 outc = clamp(result * texel + 0.07 * texel, 0.0, 1.0);
             colorOut = vec4(outc, uAlpha);
         } else if (texMode == 2) {
-            vec3 texel = texture(texmap, DataIn.tex_coord).rgb;
-            vec3 lighting = intensity * texel + spec.rgb;
-            vec3 outc = max(lighting, 0.07 * texel);
+            vec3 texel = texture(texmap1, DataIn.tex_coord).rgb;
+            vec3 outc = clamp(result * texel + 0.07 * texel, 0.0, 1.0);
             colorOut = vec4(outc, uAlpha);
         } else if (texMode == 3) {
+            vec3 texel = texture(texmap2, DataIn.tex_coord).rgb;
+            vec3 outc = clamp(result * texel + 0.07 * texel, 0.0, 1.0);
+            colorOut = vec4(outc, uAlpha);
+        } else if (texMode == 4) {
+            vec3 texel = texture(texmap3, DataIn.tex_coord).rgb;
+            vec3 outc = clamp(result * texel + 0.07 * texel, 0.0, 1.0);
+            colorOut = vec4(outc, uAlpha);
+        } else {
             vec2 tiledTC1 = DataIn.tex_coord * terrainTile1;
             vec2 tiledTC2 = DataIn.tex_coord * terrainTile2;
             vec3 texel = texture(texmap2, tiledTC2).rgb;
             vec3 texel1 = texture(texmap1, tiledTC1).rgb;
-            vec3 lighting = intensity * texel * texel1 + spec.rgb;
-            vec3 outc = max(lighting, 0.07 * texel * texel1);
+            vec3 outc = clamp(result * texel * texel1 + 0.07 * texel * texel1, 0.0, 1.0);
             colorOut = vec4(outc, uAlpha);
         }
 

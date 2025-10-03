@@ -61,6 +61,8 @@ float r = 45.0f;
 bool keyStates[256] = { false };
 bool specialKeyStates[256] = { false };
 
+// PI
+const float PI = 3.14159265f;
 
 // Camera modes
 enum CameraMode { FOLLOW, THIRD, TOP_ORTHO, TOP_PERSPECTIVE };
@@ -84,6 +86,7 @@ const float CAM_ORBIT_MAX_HEIGHT = 80.0f;
 const float DRONE_WIDTH = 1.25f/2.0f;
 const float DRONE_DEPTH = 0.75f/2.0f;
 const float DRONE_HEIGHT = 0.15f/2.0f;
+const float DRONE_MEASURE[3] = { DRONE_WIDTH, DRONE_HEIGHT, DRONE_DEPTH };
 
 // Buildings Scale
 const float BUILDING_WIDTH = 10.0f;
@@ -106,7 +109,7 @@ char s[32];
 float lightPos[4] = {4.0f, 15.0f, 2.0f, 1.0f};
 
 // Directional light
-float dirLightDir[4] = { -0.2f, -1.0f, -0.3f, 0.0f }; // directional light (w=0)
+float dirLightDir[4] = { -1.0f, -0.5f, -0.3f, 0.0f }; // directional light (w=0)
 
 // -- Light counts (single place to change) --
 #define NUM_POINT_LIGHTS 7
@@ -128,21 +131,13 @@ float pointLightPos[NUM_POINT_LIGHTS][4] = {
 };
 
 // Spotlights
-float spotLightPos[NUM_SPOT_LIGHTS][4] = {
-    { 25.0f, 12.0f, -10.0f, 1.0f },
-    { 5.0f, 12.0f, -10.0f, 1.0f },
-	{ 25.0f, 12.0f, 20.0f, 1.0f },
-    { 5.0f, 12.0f, 20.0f, 1.0f }
-};
-float spotLightDir[NUM_SPOT_LIGHTS][3] = {
-    { 0.0f, -1.0f, 0.5f },
-    { 0.0f, -1.0f, 0.5f },
-	{ 0.0f, -1.0f, -0.5f },
-    { 0.0f, -1.0f, -0.5f }
+float spotLightOffset[NUM_SPOT_LIGHTS][4] = {
+    { -2.0f, 0.0f,  2.0f, 0.0f },
+	{  2.0f, 0.0f,  2.0f, 0.0f },
+	{ -2.0f, 0.0f, -2.0f, 0.0f },
+	{  2.0f, 0.0f, -2.0f, 0.0f }
 };
 
-
-//Spotlight
 bool spotlight_mode = false;
 float coneDir[4] = { 0.0f, -0.0f, -1.0f, 0.0f };
 
@@ -541,9 +536,15 @@ void processKeysDown(unsigned char key, int xx, int yy) {
             printf("Camera Spherical Coordinates (%f, %f, %f)\n", alpha, beta, r);
             break;
         case 'l':
-            spotlight_mode = !spotlight_mode;
-            printf("Spotlight toggled: %d\n", spotlight_mode);
-            break;
+            if (!spotlight_mode) {
+				spotlight_mode = true;
+				printf("Point light disabled. Spot light enabled\n");
+			}
+			else {
+				spotlight_mode = false;
+				printf("Spot light disabled. Point light enabled\n");
+			}
+			break;;
         case 'r':
             alpha = 57.0f; beta = 18.0f; r = 45.0f;
             camX = r * sin(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
@@ -913,6 +914,9 @@ void renderSim(void) {
 	mu.multMatrixPoint(gmu::VIEW, lightPos, lposAux);   //lightPos definido em World Coord so is converted to eye space
 	renderer.setLightPos(lposAux);
 
+	//Spotlight settings
+	renderer.setSpotLightMode(spotlight_mode);
+
 	// --- Directional light ---
 	// dirLightDir is a direction (w = 0.0f). Use multMatrixPoint with w==0 to transform vectors
 	float dirEye4[4] = { dirLightDir[0], dirLightDir[1], dirLightDir[2], dirLightDir[3] };
@@ -922,7 +926,7 @@ void renderSim(void) {
 	// prepare 3-component arrays for the renderer API
 	float dirEye3[3] = { dAux[0], dAux[1], dAux[2] };
 	float dirAmb[3]  = { 0.05f, 0.05f, 0.05f };
-	float sunIntensity = 1.5f; // 1.0 = same, 2.0 = twice as bright
+	float sunIntensity = 2.0f; // 1.0 = same, 2.0 = twice as bright
 	float dirDiff[3] = { 0.40f * sunIntensity, 0.40f * sunIntensity, 0.40f * sunIntensity };
 	float dirSpec[3] = { 0.70f * sunIntensity, 0.70f * sunIntensity, 0.70f * sunIntensity };
 
@@ -956,7 +960,7 @@ void renderSim(void) {
 	    mu.multMatrixPoint(gmu::VIEW, pointLightPos[i], pAux4); // world->eye
 	    float pEye3[3] = { pAux4[0], pAux4[1], pAux4[2] };
 
-		float intensity = 10.0f;
+		float intensity = 0.0f;
 
 	    float pAmb[3]  = { 0.02f, 0.02f, 0.02f };
 	    float pDiff[3] = { 0.60f * intensity, 0.50f * intensity, 0.40f * intensity};
@@ -972,15 +976,31 @@ void renderSim(void) {
 
 	// --- Spotlights ---
 	for (int i = 0; i < NUM_SPOT_LIGHTS; i++) {
-	    float sAux4[4];
-	    mu.multMatrixPoint(gmu::VIEW, spotLightPos[i], sAux4); // world->eye
-	    float sPos3[3] = { sAux4[0], sAux4[1], sAux4[2] };
+		// Calculate spotlight position in world space
+		float spotlightpos[4] = {
+			drone.pos[0] + DRONE_DEPTH,
+			drone.pos[1],
+			drone.pos[2],
+			1.0f
+		};
+		float sAux4[4];
+		mu.multMatrixPoint(gmu::VIEW, spotlightpos, sAux4);
+		float sPos3[3] = { sAux4[0], sAux4[1], sAux4[2] };
 
-	    // spot direction is already a 3-float array in world space; transform it as a vector (w=0)
-	    float sDirWorld4[4] = { spotLightDir[i][0], spotLightDir[i][1], spotLightDir[i][2], 0.0f };
-	    float sDirEye4[4];
-	    mu.multMatrixPoint(gmu::VIEW, sDirWorld4, sDirEye4);
-	    float sDir3[3] = { sDirEye4[0], sDirEye4[1], sDirEye4[2] };
+		// Rotate drone.dir by 90° around drone's local Z axis
+		float theta = PI / 2;
+		float cosTheta = cos(theta);
+		float sinTheta = sin(theta);
+
+		float newDirX = cosTheta * drone.dir[0] + sinTheta * drone.dir[2];
+		float newDirY = drone.dir[1];
+		float newDirZ = -sinTheta * drone.dir[0] + cosTheta * drone.dir[2];
+
+		// Transform spotlight direction to eye space
+		float sDirWorld4[4] = { newDirX, newDirY, newDirZ, 0.0f };
+		float sDirEye4[4];
+		mu.multMatrixPoint(gmu::VIEW, sDirWorld4, sDirEye4);
+		float sDir3[3] = { sDirEye4[0], sDirEye4[1], sDirEye4[2] };
 
 		float intensity = 5.0f; // >1.0 makes it brighter, <1.0 makes it dimmer
 
@@ -989,7 +1009,6 @@ void renderSim(void) {
 	    float sSpec[3] = { 0.8f * intensity, 0.8f * intensity, 0.8f * intensity };
 
 	    // spot cutoffs (use cos of angle). Example: inner=12.5deg outer=17.5deg
-	    const float PI = 3.14159265f;
 	    float innerCutDeg = 12.5f, outerCutDeg = 17.5f;
 	    float innerCutCos = cosf(innerCutDeg * PI / 180.0f);
 	    float outerCutCos = cosf(outerCutDeg * PI / 180.0f);
