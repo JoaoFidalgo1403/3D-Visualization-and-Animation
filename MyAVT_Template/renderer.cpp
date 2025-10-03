@@ -279,10 +279,10 @@ void Renderer::setSpotParam(float* coneDir, const float cutOff) {
     glUniform1f(loc, cutOff);
 }
 
-void Renderer::setSpotLightMode(bool spotLightMode) {
+void Renderer::setNightMode(bool nightMode) {
     GLint loc;
-    loc = glGetUniformLocation(program, "spotlight_mode");
-    if (spotLightMode)
+    loc = glGetUniformLocation(program, "night_mode");
+    if (nightMode)
         glUniform1i(loc, 1);
     else
         glUniform1i(loc, 0);

@@ -49,20 +49,29 @@ gmu mu;
 
 //Object of class renderer to manage the rendering of meshes and ttf-based bitmap text
 Renderer renderer;
+
+// Object of class model to manage the loading of meshes from OBJ files
+bool fontLoaded = false;
+
+// --- Utility structures and functions ---
+
+// 3D Vector
+struct vec3 {
+	float x, y, z;
+	vec3(float x_, float y_, float z_) : x(x_), y(y_), z(z_) {}
+};
+
+// PI
+const float PI = 3.14159265f;
 	
+// --- Camera parameters ---
+
 // Camera Position
 float camX, camY, camZ;
 
 // Camera Spherical Coordinates
 float alpha = 57.0f, beta = 18.0f;
 float r = 45.0f;
-
-// Key states arrays
-bool keyStates[256] = { false };
-bool specialKeyStates[256] = { false };
-
-// PI
-const float PI = 3.14159265f;
 
 // Camera modes
 enum CameraMode { FOLLOW, THIRD, TOP_ORTHO, TOP_PERSPECTIVE };
@@ -82,22 +91,7 @@ const float CAM_ORBIT_SENSITIVITY_Y = 0.05f; // world units per pixel vertical
 const float CAM_ORBIT_MIN_HEIGHT = 1.0f;
 const float CAM_ORBIT_MAX_HEIGHT = 80.0f;
 
-// Drone Scale
-const float DRONE_WIDTH = 1.25f/2.0f;
-const float DRONE_DEPTH = 0.75f/2.0f;
-const float DRONE_HEIGHT = 0.15f/2.0f;
-const float DRONE_MEASURE[3] = { DRONE_WIDTH, DRONE_HEIGHT, DRONE_DEPTH };
-
-// Buildings Scale
-const float BUILDING_WIDTH = 10.0f;
-const float BUILDING_DEPTH = 10.0f;
-
-// Dome parameters
-const float DOME_RADIUS = 100.0f;
-const float DOME_CENTER_X = 35.0f;
-const float DOME_CENTER_Y = 0.0f;
-const float DOME_CENTER_Z = 35.0f;
-const float DOME_TRANSPARENCY = 0.75f;
+// --- Mouse and Keyboard control ---
 
 // Mouse Tracking Variables
 int startX, startY, tracking = 0;
@@ -106,50 +100,39 @@ int startX, startY, tracking = 0;
 long myTime,timebase = 0,frame = 0;
 char s[32];
 
-float lightPos[4] = {4.0f, 15.0f, 2.0f, 1.0f};
+// Key states arrays
+bool keyStates[256] = { false };
+bool specialKeyStates[256] = { false };
 
-// Directional light
-float dirLightDir[4] = { -1.0f, -0.5f, -0.3f, 0.0f }; // directional light (w=0)
+// --- Birds Parameters ---
+float const BIRD_MAX_SPAWN_RADIUS = 95.0f;
+float const BIRD_MIN_SPAWN_RADIUS = 70.0f;
+float const BIRD_MAX_DISTANCE = 100.0f;
 
-// -- Light counts (single place to change) --
-#define NUM_POINT_LIGHTS 7
-#define NUM_SPOT_LIGHTS  4
-
-// Runtime constants (use these when an `int` is required)
-const int kNumPointLights = NUM_POINT_LIGHTS;
-const int kNumSpotLights  = NUM_SPOT_LIGHTS;
-
-// Point lights
-float pointLightPos[NUM_POINT_LIGHTS][4] = {
-    { 5.0f,  5.0f,  5.0f, 1.0f },
-    {-5.0f,  5.0f,  5.0f, 1.0f },
-    { 5.0f,  5.0f, -5.0f, 1.0f },
-    {-5.0f,  5.0f, -5.0f, 1.0f },
-    { 0.0f, 10.0f,  0.0f, 1.0f },
-    { 0.0f,  2.0f,  5.0f, 1.0f },
-	{ 15.0f,  15.0f,  5.0f, 1.0f }	
+struct Bird {
+    float pos[3];
+    float velocity[3];
+    float rotation; // degrees
+    float rotSpeed; // degrees/sec
+    Bird(float x, float y, float z, float vx, float vy, float vz, float rs)
+        : rotation(0.0f), rotSpeed(rs) {
+        pos[0] = x; pos[1] = y; pos[2] = z;
+        velocity[0] = vx; velocity[1] = vy; velocity[2] = vz;
+    }
 };
 
-// Spotlights
-float spotLightOffset[NUM_SPOT_LIGHTS][4] = {
-    { 2.0f, 0.0f, -2.0f, 0.0f },
-	{ 2.0f, 0.0f,  2.0f, 0.0f },
-	{ -2.0f, 0.0f, -2.0f, 0.0f },
-	{ -2.0f, 0.0f,  2.0f, 0.0f }
+std::vector<Bird> birds;
+
+struct AABB {
+	float minX, minY, minZ;
+	float maxX, maxY, maxZ;
 };
 
-bool spotlight_mode = false;
-float coneDir[4] = { 0.0f, -0.0f, -1.0f, 0.0f };
-
-bool fontLoaded = false;
-
-float cubeHeights[6][6]; // Store heights for each cube
-std::vector<std::pair<int,int>> openAreas;
-
-struct vec3 {
-	float x, y, z;
-	vec3(float x_, float y_, float z_) : x(x_), y(y_), z(z_) {}
-};
+// --- Drone Parameters ---
+const float DRONE_WIDTH = 1.25f/2.0f;
+const float DRONE_DEPTH = 0.75f/2.0f;
+const float DRONE_HEIGHT = 0.15f/2.0f;
+const float DRONE_MEASURE[3] = { DRONE_WIDTH, DRONE_HEIGHT, DRONE_DEPTH };
 
 vector<vec3> drone_parts_position = {
 	{-0.625f, 0.0f, -0.375f},   // Main body (cube)
@@ -171,23 +154,54 @@ struct Drone {
 };
 Drone drone;
 
-struct Bird {
-    float pos[3];
-    float velocity[3];
-    float rotation; // degrees
-    float rotSpeed; // degrees/sec
-    Bird(float x, float y, float z, float vx, float vy, float vz, float rs)
-        : rotation(0.0f), rotSpeed(rs) {
-        pos[0] = x; pos[1] = y; pos[2] = z;
-        velocity[0] = vx; velocity[1] = vy; velocity[2] = vz;
-    }
-};
-std::vector<Bird> birds;
+// --- City parameters ---
+const float CITY_CENTER[3] = {35.0f, 0.0f, 35.0f};
 
-struct AABB {
-	float minX, minY, minZ;
-	float maxX, maxY, maxZ;
+// Buildings Scale
+const float BUILDING_WIDTH = 10.0f;
+const float BUILDING_DEPTH = 10.0f;
+
+float cubeHeights[6][6]; // Store heights for each cube
+std::vector<std::pair<int,int>> openAreas;
+
+// Dome parameters
+const float DOME_RADIUS = 100.0f;
+const float DOME_TRANSPARENCY = 0.75f;
+
+// --- Light parameters ---
+
+float lightPos[4] = {4.0f, 15.0f, 2.0f, 1.0f};
+
+// Directional light
+float dirLightDir[4] = { -1.0f, -0.5f, -0.3f, 0.0f }; // directional light (w=0)
+
+// Light counts
+#define NUM_POINT_LIGHTS 7
+#define NUM_SPOT_LIGHTS  4
+
+// Runtime constants
+const int kNumPointLights = NUM_POINT_LIGHTS;
+const int kNumSpotLights  = NUM_SPOT_LIGHTS;
+
+// Point lights
+float pointLightPos[NUM_POINT_LIGHTS][4] = {
+    { 5.0f,  5.0f,  5.0f, 1.0f },
+    {-5.0f,  5.0f,  5.0f, 1.0f },
+    { 5.0f,  5.0f, -5.0f, 1.0f },
+    {-5.0f,  5.0f, -5.0f, 1.0f },
+    { 0.0f, 10.0f,  0.0f, 1.0f },
+    { 0.0f,  2.0f,  5.0f, 1.0f },
+	{ 15.0f,  15.0f,  5.0f, 1.0f }	
 };
+
+// Spotlights
+float spotLightOffset[NUM_SPOT_LIGHTS][4] = {
+    { 2.0f, 0.0f, -2.0f, 0.0f },
+	{ 2.0f, 0.0f,  2.0f, 0.0f },
+	{ -2.0f, 0.0f, -2.0f, 0.0f },
+	{ -2.0f, 0.0f,  2.0f, 0.0f }
+};
+bool night_mode = false;
 
 /// ::::::::::::::::::::::::::::::::::::::::::::::::CALLBACK FUNCIONS:::::::::::::::::::::::::::::::::::::::::::::::::://///
 
@@ -228,7 +242,7 @@ struct BirdData {
 };
 
 // Helper function to generate a new bird spawn around the drone
-BirdData spawnBird(float minDistFromDrone, float maxDistFromDrone) {
+BirdData spawnBird() {
     BirdData b;
 
     // Random angles for uniform direction on sphere
@@ -238,17 +252,18 @@ BirdData spawnBird(float minDistFromDrone, float maxDistFromDrone) {
 
     // Radius sampled uniformly in spherical shell volume
     float u = rand() / (float)RAND_MAX;
-    float minR3 = minDistFromDrone * minDistFromDrone * minDistFromDrone;
-    float maxR3 = maxDistFromDrone * maxDistFromDrone * maxDistFromDrone;
+    float minR3 = BIRD_MIN_SPAWN_RADIUS * BIRD_MIN_SPAWN_RADIUS * BIRD_MIN_SPAWN_RADIUS;
+    float maxR3 = BIRD_MAX_SPAWN_RADIUS * BIRD_MAX_SPAWN_RADIUS * BIRD_MAX_SPAWN_RADIUS;
     float r_samp = cbrtf(u * (maxR3 - minR3) + minR3);
 
     // Convert spherical → cartesian, offset by drone position
-    b.pos[0] = drone.pos[0] + r_samp * sinPhi * cosf(theta);
-    b.pos[1] = drone.pos[1] + r_samp * cosPhi;
-    b.pos[2] = drone.pos[2] + r_samp * sinPhi * sinf(theta);
+    b.pos[0] = CITY_CENTER[0] + r_samp * sinPhi * cosf(theta);
+    b.pos[1] = CITY_CENTER[1] + r_samp * cosPhi;
+	if (b.pos[1] < 0.0f) b.pos[1] = -b.pos[1]; // Ensure above ground
+    b.pos[2] = CITY_CENTER[2] + r_samp * sinPhi * sinf(theta);
 
     // Inward direction
-    float dir[3] = { drone.pos[0] - b.pos[0], drone.pos[1] - b.pos[1], drone.pos[2] - b.pos[2] };
+    float dir[3] = { CITY_CENTER[0] - b.pos[0], CITY_CENTER[1] - b.pos[1], CITY_CENTER[2] - b.pos[2] };
     float len = sqrt(dir[0]*dir[0] + dir[1]*dir[1] + dir[2]*dir[2]);
     dir[0] /= len; dir[1] /= len; dir[2] /= len;
 
@@ -273,7 +288,7 @@ BirdData spawnBird(float minDistFromDrone, float maxDistFromDrone) {
     newDir[2] = cosA * dir[2] + sinA * (axis[0]*dir[1] - axis[1]*dir[0]) + (1-cosA)*dot*axis[2];
 
     // Velocity
-    float speed = 10.0f;
+    float speed = 2.0f;
     b.velocity[0] = speed * newDir[0];
     b.velocity[1] = speed * newDir[1];
     b.velocity[2] = speed * newDir[2];
@@ -288,11 +303,9 @@ BirdData spawnBird(float minDistFromDrone, float maxDistFromDrone) {
 // Initialize birds with random positions,velocities, and rotation speeds
 void initBirds(int numBirds) {
     birds.clear();
-    const float minDist = 30.0f;
-    const float maxDist = 60.0f;
 
     for (int i = 0; i < numBirds; ++i) {
-        BirdData d = spawnBird(minDist, maxDist);
+        BirdData d = spawnBird();
         birds.emplace_back(d.pos[0], d.pos[1], d.pos[2],
                            d.velocity[0], d.velocity[1], d.velocity[2],
                            d.rotSpeed);
@@ -302,8 +315,6 @@ void initBirds(int numBirds) {
 
 // Update bird positions and rotations
 void updateBirds(float dt) {
-    const float maxDistFromDrone = 60.0f; // radius around drone
-
     // Speed multiplier after 30 seconds
     int elapsedMs = glutGet(GLUT_ELAPSED_TIME);
     float speedMultiplier = (elapsedMs > 30000) ? 1.3f : 1.0f;
@@ -316,12 +327,12 @@ void updateBirds(float dt) {
         if (b.rotation > 360.0f) b.rotation -= 360.0f;
         if (b.rotation < 0.0f) b.rotation += 360.0f;
 
-        float dx = b.pos[0] - drone.pos[0];
-        float dy = b.pos[1] - drone.pos[1];
-        float dz = b.pos[2] - drone.pos[2];
+        float dx = b.pos[0] - CITY_CENTER[0];
+        float dy = b.pos[1] - CITY_CENTER[1];
+        float dz = b.pos[2] - CITY_CENTER[2];
         float dist = sqrt(dx*dx + dy*dy + dz*dz);
-		if (dist > maxDistFromDrone) {
-			BirdData d = spawnBird(30.0f, maxDistFromDrone);
+		if (dist > BIRD_MAX_DISTANCE || b.pos[1] < 0.0f) {
+			BirdData d = spawnBird();
 			b.pos[0] = d.pos[0]; b.pos[1] = d.pos[1]; b.pos[2] = d.pos[2];
 			b.velocity[0] = d.velocity[0]; b.velocity[1] = d.velocity[1]; b.velocity[2] = d.velocity[2];
 			b.rotation = 0.0f;
@@ -329,9 +340,9 @@ void updateBirds(float dt) {
 		}
 
 		// Calculate collision
-		float dist_x = drone.pos[0] - b.pos[0];
-		float dist_y = drone.pos[1] - b.pos[1];
-		float dist_z = drone.pos[2] - b.pos[2];
+		float dist_x = CITY_CENTER[0] - b.pos[0];
+		float dist_y = CITY_CENTER[1] - b.pos[1];
+		float dist_z = CITY_CENTER[2] - b.pos[2];
     	if (std::sqrt(dist_x*dist_x + dist_y*dist_y + dist_z*dist_z) <= 1.0f) {
 			drone = Drone(); // Reset drone
 		} 
@@ -536,13 +547,13 @@ void processKeysDown(unsigned char key, int xx, int yy) {
             printf("Camera Spherical Coordinates (%f, %f, %f)\n", alpha, beta, r);
             break;
         case 'l':
-            if (!spotlight_mode) {
-				spotlight_mode = true;
-				printf("Point light disabled. Spot light enabled\n");
+            if (!night_mode) {
+				night_mode = true;
+				printf("Directional Light disabled. Night Mode enabled\n");
 			}
 			else {
-				spotlight_mode = false;
-				printf("Spot light disabled. Point light enabled\n");
+				night_mode = false;
+				printf("Night Mode disabled. Directional Light enabled\n");
 			}
 			break;;
         case 'r':
@@ -807,7 +818,7 @@ void updatePointLightsFromBuildings()
     // How much above the roof to place the light
     const float roofOffset = 1.0f;
 
-    for (int k = 0; k < NUM_POINT_LIGHTS - 1; ++k) {
+    for (int k = 0; k < NUM_POINT_LIGHTS; ++k) {
         if (k < (int)list.size()) {
             const B &b = list[k];
             float topY = b.h + roofOffset;
@@ -917,7 +928,7 @@ void renderSim(void) {
 	renderer.setLightPos(lposAux);
 
 	//Spotlight settings
-	renderer.setSpotLightMode(spotlight_mode);
+	renderer.setNightMode(night_mode);
 
 	// --- Directional light ---
 	// dirLightDir is a direction (w = 0.0f). Use multMatrixPoint with w==0 to transform vectors
@@ -1158,9 +1169,9 @@ void renderSim(void) {
 	}
 
 	// camera distance test
-	float dx = camWX - DOME_CENTER_X;
-	float dy = camWY - DOME_CENTER_Y;
-	float dz = camWZ - DOME_CENTER_Z;
+	float dx = camWX - CITY_CENTER[0];
+	float dy = camWY - CITY_CENTER[1];
+	float dz = camWZ - CITY_CENTER[2];
 	float camDist = sqrtf(dx*dx + dy*dy + dz*dz);
 	bool cameraInside = (camDist < DOME_RADIUS);
 
@@ -1174,7 +1185,7 @@ void renderSim(void) {
 
 	// transform + render dome (meshID 2 in your buildScene)
 	mu.pushMatrix(gmu::MODEL);
-	mu.translate(gmu::MODEL, DOME_CENTER_X, DOME_CENTER_Y, DOME_CENTER_Z);
+	mu.translate(gmu::MODEL, CITY_CENTER[0], CITY_CENTER[1], CITY_CENTER[2]);
 	mu.scale(gmu::MODEL, DOME_RADIUS, DOME_RADIUS, DOME_RADIUS);
 	mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
 	mu.computeNormalMatrix3x3();
@@ -1458,7 +1469,7 @@ int main(int argc, char **argv) {
 	return(1);
 
 	// Initialize birds
-	initBirds(0);
+	initBirds(30);
 
 	//  GLUT main loop
 	glutMainLoop();

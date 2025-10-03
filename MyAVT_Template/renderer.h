@@ -58,7 +58,7 @@ public:
 
   void setSpotParam(float *coneDir, float cutOff);
 
-  void setSpotLightMode(bool spotLightMode);
+  void setNightMode(bool nightMode);
 
   static const int MAX_POINT_LIGHTS = 7;
   static const int MAX_SPOT_LIGHTS = 4;

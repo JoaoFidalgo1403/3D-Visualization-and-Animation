@@ -32,7 +32,7 @@ uniform sampler2D texmap2;
 uniform sampler2D texmap3;
 
 uniform int texMode;
-uniform bool spotlight_mode;    // legacy toggle (keeps old behaviour)
+uniform bool night_mode;    // legacy toggle (keeps old behaviour)
 uniform vec4 coneDir;           // legacy spot direction (eye-space)
 uniform float spotCosCutOff;    // legacy cut-off cosine
 
@@ -150,7 +150,7 @@ void main() {
     vec3 viewDir = normalize(DataIn.eye); // eye-space view vector (from frag toward eye at origin)
     vec3 fragPos = DataIn.fragPos;
 
-    if (spotlight_mode) {
+    if (night_mode) {
         // Use only the spotLights[] array (ignore dir + point lights)
         vec3 result = vec3(0.0);
 
