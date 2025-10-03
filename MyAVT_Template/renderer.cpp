@@ -288,6 +288,33 @@ void Renderer::setNightMode(bool nightMode) {
         glUniform1i(loc, 0);
 }
 
+void Renderer::setPLightMode(bool plightMode) {
+    GLint loc;
+    loc = glGetUniformLocation(program, "plight_mode");
+    if (plightMode)
+        glUniform1i(loc, 1);
+    else
+        glUniform1i(loc, 0);
+}
+
+void Renderer::setHeadlightsMode(bool headlightsMode) {
+    GLint loc;
+    loc = glGetUniformLocation(program, "headlights_mode");
+    if (headlightsMode)
+        glUniform1i(loc, 1);
+    else
+        glUniform1i(loc, 0);
+}
+
+void Renderer::setFogMode(bool fogMode) {
+    GLint loc;
+    loc = glGetUniformLocation(program, "fog_mode");
+    if (fogMode)
+        glUniform1i(loc, 1);
+    else
+        glUniform1i(loc, 0);
+}
+
 void Renderer::setLightPos(float* lightPos) {
     glUniform4fv(lpos_loc, 1, lightPos);
 }

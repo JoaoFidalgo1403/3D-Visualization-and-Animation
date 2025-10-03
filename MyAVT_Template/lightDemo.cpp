@@ -201,8 +201,11 @@ float spotLightOffset[NUM_SPOT_LIGHTS][4] = {
 	{ -2.0f, 0.0f, -2.0f, 0.0f },
 	{ -2.0f, 0.0f,  2.0f, 0.0f }
 };
-bool night_mode = false;
 
+bool night_mode = false;
+bool plight_mode = true;
+bool headlights_mode = true;
+bool fog_mode = true;
 /// ::::::::::::::::::::::::::::::::::::::::::::::::CALLBACK FUNCIONS:::::::::::::::::::::::::::::::::::::::::::::::::://///
 
 void timer(int value)
@@ -299,7 +302,6 @@ BirdData spawnBird() {
     return b;
 }
 
-
 // Initialize birds with random positions,velocities, and rotation speeds
 void initBirds(int numBirds) {
     birds.clear();
@@ -311,7 +313,6 @@ void initBirds(int numBirds) {
                            d.rotSpeed);
     }
 }
-
 
 // Update bird positions and rotations
 void updateBirds(float dt) {
@@ -542,11 +543,18 @@ void processKeysDown(unsigned char key, int xx, int yy) {
 	keyStates[key] = true;
 
     switch (key) {
-        case 27: glutLeaveMainLoop(); break;
-        case 'c':
-            printf("Camera Spherical Coordinates (%f, %f, %f)\n", alpha, beta, r);
-            break;
-        case 'l':
+        case 27: glutLeaveMainLoop(); break;;
+		case 'f':
+			if (!fog_mode) {
+				fog_mode = true;
+				printf("Fog mode enabled\n");
+			}
+			else {
+				fog_mode = false;
+				printf("Fog mode disabled\n");
+			}
+			break;
+		case 'n':
             if (!night_mode) {
 				night_mode = true;
 				printf("Directional Light disabled. Night Mode enabled\n");
@@ -555,7 +563,29 @@ void processKeysDown(unsigned char key, int xx, int yy) {
 				night_mode = false;
 				printf("Night Mode disabled. Directional Light enabled\n");
 			}
-			break;;
+			break;
+        case 'c':
+            if (!plight_mode) {
+				plight_mode = true;
+				printf("Point Light Mode enabled\n");
+			}
+			else {
+				plight_mode = false;
+				printf("Point Light Mode disabled\n");
+			}
+			break;
+		case 'h':
+            if (!headlights_mode) {
+				headlights_mode = true;
+				printf("Headlights On\n");
+			}
+			else {
+				headlights_mode = false;
+				printf("Headlights off");
+			}
+			break;
+		
+		
         case 'r':
             alpha = 57.0f; beta = 18.0f; r = 45.0f;
             camX = r * sin(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
@@ -563,8 +593,8 @@ void processKeysDown(unsigned char key, int xx, int yy) {
             camY = r * sin(beta * 3.14f / 180.0f);
             drone = Drone(); // reset drone state
             break;
-        case 'm': glEnable(GL_MULTISAMPLE); break;
-        case 'n': glDisable(GL_MULTISAMPLE); break;
+        case 'x': glEnable(GL_MULTISAMPLE); break;
+        case 'z': glDisable(GL_MULTISAMPLE); break;
         case '1': cameraMode = THIRD; printf("Camera mode: THIRD PERSON ORBIT\n"); break;
         case '2': cameraMode = TOP_ORTHO; printf("Camera mode: TOP ORTHO\n"); break;
         case '3': cameraMode = TOP_PERSPECTIVE; printf("Camera mode: TOP PERSPECTIVE\n"); break;
@@ -929,6 +959,11 @@ void renderSim(void) {
 
 	//Spotlight settings
 	renderer.setNightMode(night_mode);
+	renderer.setPLightMode(plight_mode);
+	renderer.setHeadlightsMode(headlights_mode);
+
+	//Fog Mode
+	renderer.setFogMode(fog_mode);
 
 	// --- Directional light ---
 	// dirLightDir is a direction (w = 0.0f). Use multMatrixPoint with w==0 to transform vectors

@@ -60,6 +60,12 @@ public:
 
   void setNightMode(bool nightMode);
 
+  void setPLightMode(bool plightMode);
+
+  void setHeadlightsMode(bool headlightsMode);
+
+  void setFogMode(bool fogMode);
+
   static const int MAX_POINT_LIGHTS = 7;
   static const int MAX_SPOT_LIGHTS = 4;
 

@@ -32,8 +32,10 @@ uniform sampler2D texmap2;
 uniform sampler2D texmap3;
 
 uniform int texMode;
-uniform bool night_mode;    // legacy toggle (keeps old behaviour)
-uniform vec4 coneDir;           // legacy spot direction (eye-space)
+uniform bool night_mode;        // Toggle on or off directional light
+uniform bool plight_mode;       // Toggle point pointLights
+uniform bool headlights_mode;   // Toggle drone's headlights
+uniform bool fog_mode;          // Toggle on or off the fog
 uniform float spotCosCutOff;    // legacy cut-off cosine
 
 out vec4 colorOut;
@@ -150,73 +152,29 @@ void main() {
     vec3 viewDir = normalize(DataIn.eye); // eye-space view vector (from frag toward eye at origin)
     vec3 fragPos = DataIn.fragPos;
 
-    if (night_mode) {
-        // Use only the spotLights[] array (ignore dir + point lights)
-        vec3 result = vec3(0.0);
-
-        // point lights
-        int pcount = (numPointLights > 0) ? numPointLights : 7;
-        pcount = min(pcount, 7);
-        for (int i = 0; i < pcount; ++i) {
-            result += CalcPointLight(pointLights[i], n, fragPos, viewDir);
-        }      
-        int scount = (numSpotLights > 0) ? numSpotLights : 4;
-        scount = min(scount, 4);
-        for (int i = 0; i < scount; ++i) {
-            result += CalcSpotLight(spotLights[i], n, fragPos, viewDir);
-        }
-
-        // Compose final color depending on texturing mode (use `result` as lighting)
-        if (texMode == 0) {
-            // no texturing
-            colorOut = vec4(clamp(result + mat.emissive.rgb, 0.0, 1.0), uAlpha);
-        } else if (texMode == 1) {
-            vec3 texel = texture(texmap, DataIn.tex_coord).rgb;
-            vec3 outc = clamp(result * texel + 0.07 * texel, 0.0, 1.0);
-            colorOut = vec4(outc, uAlpha);
-        } else if (texMode == 2) {
-            vec3 texel = texture(texmap1, DataIn.tex_coord).rgb;
-            vec3 outc = clamp(result * texel + 0.07 * texel, 0.0, 1.0);
-            colorOut = vec4(outc, uAlpha);
-        } else if (texMode == 3) {
-            vec3 texel = texture(texmap2, DataIn.tex_coord).rgb;
-            vec3 outc = clamp(result * texel + 0.07 * texel, 0.0, 1.0);
-            colorOut = vec4(outc, uAlpha);
-        } else if (texMode == 4) {
-            vec3 texel = texture(texmap3, DataIn.tex_coord).rgb;
-            vec3 outc = clamp(result * texel + 0.07 * texel, 0.0, 1.0);
-            colorOut = vec4(outc, uAlpha);
-        } else {
-            vec2 tiledTC1 = DataIn.tex_coord * terrainTile1;
-            vec2 tiledTC2 = DataIn.tex_coord * terrainTile2;
-            vec3 texel = texture(texmap2, tiledTC2).rgb;
-            vec3 texel1 = texture(texmap1, tiledTC1).rgb;
-            vec3 outc = clamp(result * texel * texel1 + 0.07 * texel * texel1, 0.0, 1.0);
-            colorOut = vec4(outc, uAlpha);
-        }
-
-        return;
-    }
-
-    // ---------- Multi-light path (directional + point lights + spot lights) ----------
     vec3 result = vec3(0.0);
 
     // directional light
-    result += CalcDirLight(dirLight, n, viewDir);
+    if (!night_mode) result += CalcDirLight(dirLight, n, viewDir);
 
     // point lights (use either numPointLights or 7)
     int pcount = (numPointLights > 0) ? numPointLights : 7;
     pcount = min(pcount, 7);
-    for (int i = 0; i < pcount; ++i) {
-        result += CalcPointLight(pointLights[i], n, fragPos, viewDir);
+    if (plight_mode) {
+        for (int i = 0; i < pcount; ++i) {
+            result += CalcPointLight(pointLights[i], n, fragPos, viewDir);
+        }
     }
 
     // spot lights (use either numSpotLights or 4)
     int scount = (numSpotLights > 0) ? numSpotLights : 4;
     scount = min(scount, 4);
-    for (int i = 0; i < scount; ++i) {
-        result += CalcSpotLight(spotLights[i], n, fragPos, viewDir);
+    if (headlights_mode) {
+        for (int i = 0; i < scount; ++i) {
+            result += CalcSpotLight(spotLights[i], n, fragPos, viewDir);
+        }
     }
+
 
     // Compose final color depending on texturing mode.
     if (texMode == 0) {
@@ -250,7 +208,7 @@ void main() {
 
     // Apply fog at the very end of main()
     vec3 fogColor = vec3(0.35, 0.18, 0.08); // #5a2e14
-    float fogDensity = 0.01;
+    float fogDensity = (fog_mode) ? 0.01f : 0.0f;
     float dist = length(DataIn.eye);  // eye-space distance to camera
     float fogFactor = exp(-pow(fogDensity * dist, 2.0));
     fogFactor = clamp(fogFactor, 0.0, 1.0);
