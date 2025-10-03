@@ -150,11 +150,16 @@ void main() {
     vec3 viewDir = normalize(DataIn.eye); // eye-space view vector (from frag toward eye at origin)
     vec3 fragPos = DataIn.fragPos;
 
-    // Legacy single-spotlight path (keeps old behaviour when spotlight_mode toggled)
     if (spotlight_mode) {
         // Use only the spotLights[] array (ignore dir + point lights)
         vec3 result = vec3(0.0);
 
+        // point lights
+        int pcount = (numPointLights > 0) ? numPointLights : 7;
+        pcount = min(pcount, 7);
+        for (int i = 0; i < pcount; ++i) {
+            result += CalcPointLight(pointLights[i], n, fragPos, viewDir);
+        }      
         int scount = (numSpotLights > 0) ? numSpotLights : 4;
         scount = min(scount, 4);
         for (int i = 0; i < scount; ++i) {

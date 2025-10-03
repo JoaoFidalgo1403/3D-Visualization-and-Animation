@@ -132,10 +132,10 @@ float pointLightPos[NUM_POINT_LIGHTS][4] = {
 
 // Spotlights
 float spotLightOffset[NUM_SPOT_LIGHTS][4] = {
-    { -2.0f, 0.0f,  2.0f, 0.0f },
-	{  2.0f, 0.0f,  2.0f, 0.0f },
+    { 2.0f, 0.0f, -2.0f, 0.0f },
+	{ 2.0f, 0.0f,  2.0f, 0.0f },
 	{ -2.0f, 0.0f, -2.0f, 0.0f },
-	{  2.0f, 0.0f, -2.0f, 0.0f }
+	{ -2.0f, 0.0f,  2.0f, 0.0f }
 };
 
 bool spotlight_mode = false;
@@ -807,7 +807,6 @@ void updatePointLightsFromBuildings()
     // How much above the roof to place the light
     const float roofOffset = 1.0f;
 
-    // If your cube mesh's base is at y=0 instead, use y = h + roofOffset.
     for (int k = 0; k < NUM_POINT_LIGHTS - 1; ++k) {
         if (k < (int)list.size()) {
             const B &b = list[k];
@@ -829,11 +828,14 @@ void updatePointLightsFromBuildings()
 void renderSim(void) {
 	FrameCount++;
 
-	// frame delta time for camera updates
 	static int lastFrameTime = glutGet(GLUT_ELAPSED_TIME);
 	int nowFrame = glutGet(GLUT_ELAPSED_TIME);
 	float frameDt = (nowFrame - lastFrameTime) * 0.001f; // seconds
 	lastFrameTime = nowFrame;
+
+	// process input & update drone state immediately so lights/rendering use latest state
+	applyKeyInputs(frameDt);
+	updateDroneState(frameDt);
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -960,7 +962,7 @@ void renderSim(void) {
 	    mu.multMatrixPoint(gmu::VIEW, pointLightPos[i], pAux4); // world->eye
 	    float pEye3[3] = { pAux4[0], pAux4[1], pAux4[2] };
 
-		float intensity = 0.0f;
+		float intensity = 10.0f;
 
 	    float pAmb[3]  = { 0.02f, 0.02f, 0.02f };
 	    float pDiff[3] = { 0.60f * intensity, 0.50f * intensity, 0.40f * intensity};
@@ -974,52 +976,77 @@ void renderSim(void) {
 	    renderer.setPointLight(i, pEye3, pAmb, pDiff, pSpec, constant, linear, quadratic);
 	}
 
-	// --- Spotlights ---
-	for (int i = 0; i < NUM_SPOT_LIGHTS; i++) {
-		// Calculate spotlight position in world space
-		float spotlightpos[4] = {
-			drone.pos[0] + DRONE_DEPTH,
-			drone.pos[1],
-			drone.pos[2],
-			1.0f
-		};
+	// --- Spotlights  ---
+	for (int i = 0; i < NUM_SPOT_LIGHTS; ++i) {
+
+		// Push a MODEL matrix identical to what drawDrone() uses
+		mu.pushMatrix(gmu::MODEL);
+		mu.translate(gmu::MODEL, drone.pos[0], drone.pos[1], drone.pos[2]);
+		mu.rotate(gmu::MODEL, drone.yaw,   0, 1, 0); // same order as drawDrone
+		mu.rotate(gmu::MODEL, drone.pitch, 0, 0, 1);
+		mu.rotate(gmu::MODEL, drone.roll,  1, 0, 0);
+
+		// --- compute spotlight world position from local offset (w = 1) ---
+		float localOffset[4] = { spotLightOffset[i][0], spotLightOffset[i][1], spotLightOffset[i][2], 1.0f };
+		float worldPos4[4];
+		mu.multMatrixPoint(gmu::MODEL, localOffset, worldPos4); // MODEL -> world
 		float sAux4[4];
-		mu.multMatrixPoint(gmu::VIEW, spotlightpos, sAux4);
+		mu.multMatrixPoint(gmu::VIEW, worldPos4, sAux4);        // world -> eye
 		float sPos3[3] = { sAux4[0], sAux4[1], sAux4[2] };
 
-		// Rotate drone.dir by 90° around drone's local Z axis
-		float theta = PI / 2;
-		float cosTheta = cos(theta);
-		float sinTheta = sin(theta);
+		// Rotation by +90 deg about Z: (x,y) -> (-y, x)
+		float localForward[4] = { 0.0f, 1.0f, 0.0f, 0.0f }; // w=0 because it's a direction
+		float localRotated[4] = {
+			-localForward[1],  // new X = -y
+			localForward[0],  // new Y = x
+			localForward[2],  // Z unchanged
+			0.0f
+		};
 
-		float newDirX = cosTheta * drone.dir[0] + sinTheta * drone.dir[2];
-		float newDirY = drone.dir[1];
-		float newDirZ = -sinTheta * drone.dir[0] + cosTheta * drone.dir[2];
+		// Transform rotated local direction -> world -> eye (use w=0)
+		float worldDir4[4];
+		mu.multMatrixPoint(gmu::MODEL, localRotated, worldDir4); // MODEL->world (w still 0)
+		float eyeDir4[4];
+		mu.multMatrixPoint(gmu::VIEW, worldDir4, eyeDir4);       // world->eye (w=0 stays 0)
 
-		// Transform spotlight direction to eye space
-		float sDirWorld4[4] = { newDirX, newDirY, newDirZ, 0.0f };
-		float sDirEye4[4];
-		mu.multMatrixPoint(gmu::VIEW, sDirWorld4, sDirEye4);
-		float sDir3[3] = { sDirEye4[0], sDirEye4[1], sDirEye4[2] };
+		// Front or back
+		float sDir3[3] = { -eyeDir4[0], -eyeDir4[1], -eyeDir4[2] };
+		if (i >= 2) {
+			sDir3[0] =  eyeDir4[0];
+			sDir3[1] =  eyeDir4[1];
+			sDir3[2] =  eyeDir4[2];
+		}
+		
+		float len = sqrtf(sDir3[0]*sDir3[0] + sDir3[1]*sDir3[1] + sDir3[2]*sDir3[2]);
+		if (len > 1e-6f) { sDir3[0] /= len; sDir3[1] /= len; sDir3[2] /= len; }
 
-		float intensity = 5.0f; // >1.0 makes it brighter, <1.0 makes it dimmer
+		// restore MODEL stack
+		mu.popMatrix(gmu::MODEL);
 
-	    float sAmb[3]  = { 0.0f, 0.0f, 0.0f };
-	    float sDiff[3] = { 1.0f * intensity, 1.0f * intensity, 1.0f * intensity };
-	    float sSpec[3] = { 0.8f * intensity, 0.8f * intensity, 0.8f * intensity };
+		// --- rest of your spotlight parameters (unchanged) ---
+		float intensity = 5.0f;
+		float sAmb[3]  = { 0.0f, 0.0f, 0.0f };
+		float sDiff[3] = { 1.0f * intensity, 1.0f * intensity, 1.0f * intensity };
+		float sSpec[3] = { 0.8f * intensity, 0.8f * intensity, 0.8f * intensity };
 
-	    // spot cutoffs (use cos of angle). Example: inner=12.5deg outer=17.5deg
-	    float innerCutDeg = 12.5f, outerCutDeg = 17.5f;
-	    float innerCutCos = cosf(innerCutDeg * PI / 180.0f);
-	    float outerCutCos = cosf(outerCutDeg * PI / 180.0f);
+		if (i >= 2) {
+			intensity = 2.0f;
+			sAmb[0]  = 1.0f; sAmb[1]  = 0.0f; sAmb[2]  = 0.0f;
+			sDiff[0] = 2.0f * intensity; sDiff[1] = 0.0f; sDiff[2] = 0.0f;
+		}
+		const float PI = 3.14159265358979f;
+		float innerCutDeg = 12.5f, outerCutDeg = 17.5f;
+		float innerCutCos = cosf(innerCutDeg * PI / 180.0f);
+		float outerCutCos = cosf(outerCutDeg * PI / 180.0f);
 
-	    // attenuation (same as point lights or tweak)
-	    float sConstant  = 1.0f;
-	    float sLinear    = 0.09f;
-	    float sQuadratic = 0.032f;
+		float sConstant  = 1.0f;
+		float sLinear    = 0.09f;
+		float sQuadratic = 0.032f;
 
-	    renderer.setSpotLight(i, sPos3, sDir3, innerCutCos, outerCutCos, sAmb, sDiff, sSpec, sConstant, sLinear, sQuadratic);
+		renderer.setSpotLight(i, sPos3, sDir3, innerCutCos, outerCutCos, sAmb, sDiff, sSpec, sConstant, sLinear, sQuadratic);
 	}
+
+
 
 	// Draw the terrain - myMeshes[6] contains the Quad object
 	mu.pushMatrix(gmu::MODEL);
@@ -1431,7 +1458,7 @@ int main(int argc, char **argv) {
 	return(1);
 
 	// Initialize birds
-	initBirds(30);
+	initBirds(0);
 
 	//  GLUT main loop
 	glutMainLoop();
