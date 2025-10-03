@@ -13,6 +13,8 @@
 #include <sstream>
 #include <string>
 #include <cstdlib>
+#include <array>
+#include <cmath>
 
 // include GLEW to access OpenGL 3.3 functions
 #include <GL/glew.h>
@@ -153,7 +155,22 @@ std::vector<std::pair<int,int>> openAreas;
 
 struct vec3 {
 	float x, y, z;
+	vec3() : x(0), y(0), z(0) {}
 	vec3(float x_, float y_, float z_) : x(x_), y(y_), z(z_) {}
+	vec3 operator+(const vec3& b) const { return vec3(x + b.x, y + b.y, z + b.z); }
+	vec3 operator-(const vec3& b) const { return vec3(x - b.x, y - b.y, z - b.z); }
+};
+
+// Helper: 3x3 matrix struct
+struct Mat3 {
+	float m[3][3];
+	vec3 operator*(const vec3& v) const {
+		return vec3(
+			m[0][0] * v.x + m[0][1] * v.y + m[0][2] * v.z,
+			m[1][0] * v.x + m[1][1] * v.y + m[1][2] * v.z,
+			m[2][0] * v.x + m[2][1] * v.y + m[2][2] * v.z
+		);
+	}
 };
 
 vector<vec3> drone_parts_position = {
@@ -349,20 +366,95 @@ void updateBirds(float dt) {
 // Collision Detection
 //
 
-AABB computeDroneAABB() {
-    AABB box;
-    float halfWidth = DRONE_WIDTH / 2.0f + 0.1f;
-    float halfHeight = DRONE_HEIGHT / 2.0f;
-    float halfDepth = DRONE_DEPTH / 2.0f + 0.1f;
+// Build rotation matrix from yaw (Y), pitch (Z), roll (X) in degrees
+Mat3 getDroneRotationMatrix(float yaw, float pitch, float roll) {
+	const float DEG2RAD = 3.14159265f / 180.0f;
+	float y = yaw * DEG2RAD;
+	float p = pitch * DEG2RAD;
+	float r = roll * DEG2RAD;
 
-    // Center at drone.pos
-    box.minX = drone.pos[0] - halfWidth;
-    box.maxX = drone.pos[0] + halfWidth;
-    box.minY = drone.pos[1] - halfHeight;
-    box.maxY = drone.pos[1] + halfHeight;
-    box.minZ = drone.pos[2] - halfDepth;
-    box.maxZ = drone.pos[2] + halfDepth;
-    return box;
+	// Yaw (Y axis)
+	Mat3 Ry = { {
+		{ cos(y), 0, sin(y) },
+		{ 0,      1, 0      },
+		{ -sin(y),0, cos(y) }
+	} };
+	// Pitch (Z axis)
+	Mat3 Rz = { {
+		{ cos(p), -sin(p), 0 },
+		{ sin(p),  cos(p), 0 },
+		{ 0,       0,      1 }
+	} };
+	// Roll (X axis)
+	Mat3 Rx = { {
+		{ 1, 0,      0     },
+		{ 0, cos(r), -sin(r)},
+		{ 0, sin(r),  cos(r)}
+	} };
+
+	// Combined: R = Ry * Rz * Rx (Y * Z * X)
+	Mat3 R = Ry;
+	// R = Ry * Rz
+	Mat3 temp;
+	for (int i = 0;i < 3;++i) for (int j = 0;j < 3;++j) {
+		temp.m[i][j] = 0;
+		for (int k = 0;k < 3;++k) temp.m[i][j] += Ry.m[i][k] * Rz.m[k][j];
+	}
+	// R = (Ry*Rz) * Rx
+	Mat3 result;
+	for (int i = 0;i < 3;++i) for (int j = 0;j < 3;++j) {
+		result.m[i][j] = 0;
+		for (int k = 0;k < 3;++k) result.m[i][j] += temp.m[i][k] * Rx.m[k][j];
+	}
+	return result;
+}
+
+// Compute the rotated AABB for the drone
+AABB computeDroneAABB() {
+	// Local half-sizes
+	float halfWidth = DRONE_WIDTH / 2.0f + 0.1f;
+	float halfHeight = DRONE_HEIGHT / 2.0f;
+	float halfDepth = DRONE_DEPTH / 2.0f + 0.1f;
+
+	// 8 corners in local space
+	std::array<vec3, 8> localCorners = { {
+		vec3(-halfWidth, -halfHeight, -halfDepth),
+		vec3(halfWidth, -halfHeight, -halfDepth),
+		vec3(-halfWidth,  halfHeight, -halfDepth),
+		vec3(halfWidth,  halfHeight, -halfDepth),
+		vec3(-halfWidth, -halfHeight,  halfDepth),
+		vec3(halfWidth, -halfHeight,  halfDepth),
+		vec3(-halfWidth,  halfHeight,  halfDepth),
+		vec3(halfWidth,  halfHeight,  halfDepth)
+	} };
+
+	// Get rotation matrix from drone's yaw, pitch, roll
+	Mat3 R = getDroneRotationMatrix(drone.yaw, drone.pitch, drone.roll);
+
+	// Transform corners to world space
+	vec3 pos(drone.pos[0], drone.pos[1], drone.pos[2]);
+	std::array<vec3, 8> worldCorners;
+	for (int i = 0; i < 8; ++i)
+		worldCorners[i] = R * localCorners[i] + pos;
+
+	// Find min/max
+	float minX = worldCorners[0].x, maxX = worldCorners[0].x;
+	float minY = worldCorners[0].y, maxY = worldCorners[0].y;
+	float minZ = worldCorners[0].z, maxZ = worldCorners[0].z;
+	for (int i = 1; i < 8; ++i) {
+		minX = std::min(minX, worldCorners[i].x);
+		maxX = std::max(maxX, worldCorners[i].x);
+		minY = std::min(minY, worldCorners[i].y);
+		maxY = std::max(maxY, worldCorners[i].y);
+		minZ = std::min(minZ, worldCorners[i].z);
+		maxZ = std::max(maxZ, worldCorners[i].z);
+	}
+
+	AABB box;
+	box.minX = minX; box.maxX = maxX;
+	box.minY = minY; box.maxY = maxY;
+	box.minZ = minZ; box.maxZ = maxZ;
+	return box;
 }
 
 AABB computeBuildingAABB(int i, int j) {
