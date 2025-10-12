@@ -40,6 +40,28 @@ int WindowHandle = 0;
 int WinX = 1024, WinY = 768;
 
 unsigned int FrameCount = 0;
+bool isPaused = false;
+
+// --- Game state (battery/distance/score) ---
+float batteryLevel = 1.0f;                        // 1.0 == full battery
+const float BATTERY_DRAIN_AT_FULL = 0.02f;        // fraction drained per second at full throttle (tweak)
+const float COLLISION_BATTERY_PENALTY = 0.20f;    // lose 1/5 of total battery on collisions
+float distanceTraveled = 0.0f;                    // meters (world units)
+int scorePoints = 0;
+
+bool isGameOver = false;
+
+float prevDronePos[3] = { 0.0f, 0.0f, 0.0f };
+
+const float GAME_MAX_THROTTLE = 15.0f;            // must match updateDroneState's maxThrottle
+const float DRONE_FALL_VELOCITY = -6.0f;          // m/s downward when battery depleted
+
+// INVULNERABILITY after collisions
+const float COLLISION_INVULN_DURATION = 2.0f; // seconds of invulnerability after taking collision damage
+const float DRONE_BLINK_PERIOD = 0.12f;      // visual blink period while invulnerable
+
+// runtime
+float collisionInvulnTimer = 0.0f; // counts down; >0 => invulnerable
 
 //File with the font
 const string fontPathFile = "fonts/arial.ttf";
@@ -233,6 +255,100 @@ void changeSize(int w, int h) {
 	mu.perspective(53.13f, ratio, 0.1f, 1000.0f);
 }
 
+// ------------------------------------------------------------
+//
+// Game State
+//
+
+// Reset game state (call on startup and on restart 'R')
+void resetGameState() {
+    batteryLevel = 1.0f;
+    distanceTraveled = 0.0f;
+    scorePoints = 0;
+	collisionInvulnTimer = 0.0f;
+    isGameOver = false;
+
+    // reset drone
+    drone = Drone();
+
+    // set prev position for distance accumulation
+    prevDronePos[0] = drone.pos[0];
+    prevDronePos[1] = drone.pos[1];
+    prevDronePos[2] = drone.pos[2];
+
+    // clear key states so no sticky input
+    memset(keyStates, 0, sizeof(keyStates));
+    memset(specialKeyStates, 0, sizeof(specialKeyStates));
+}
+
+// Game over trigger: stop inputs and start fall
+void triggerGameOver() {
+    if (isGameOver) return;
+    isGameOver = true;
+    // clear inputs
+    memset(keyStates, 0, sizeof(keyStates));
+    memset(specialKeyStates, 0, sizeof(specialKeyStates));
+    printf("Battery depleted: entering fall state.\n");
+}
+
+// --- battery loss reasons & logging helper ---
+enum BatteryLossReason { LOSS_THROTTLE, LOSS_BIRD, LOSS_BUILDING, LOSS_GROUND };
+
+static const char* reasonToStr(BatteryLossReason r) {
+    switch (r) {
+        case LOSS_THROTTLE: return "THROTTLE";
+        case LOSS_BIRD:     return "BIRD";
+        case LOSS_BUILDING: return "BUILDING";
+        case LOSS_GROUND:   return "GROUND";
+        default:            return "UNKNOWN";
+    }
+}
+
+// universal battery apply + logging
+void applyBatteryLoss(float amountFraction, BatteryLossReason reason) {
+    if (amountFraction <= 0.0f) return;
+    float before = batteryLevel;
+    batteryLevel -= amountFraction;
+    if (batteryLevel < 0.0f) batteryLevel = 0.0f;
+
+    // print human friendly data: amount in percent and remaining battery
+    int amtPct = (int)roundf(amountFraction * 100.0f);
+    int remaining = (int)roundf(batteryLevel * 100.0f);
+    printf("[BATTERY] -%d%% (%s) -> remaining %d%%\n", amtPct, reasonToStr(reason), remaining);
+    fflush(stdout);
+
+    if (batteryLevel <= 0.0f) {
+        triggerGameOver();
+    }
+}
+
+void updateBatteryAndDistance(float dt) {
+    if (isGameOver) return;
+
+    // throttle normalized [0..1] - uses absolute throttle magnitude
+    float throttleNorm = fminf(1.0f, fabsf(drone.throttle) / GAME_MAX_THROTTLE);
+
+    // drain
+	float drain = BATTERY_DRAIN_AT_FULL * throttleNorm * dt; // fraction-per-second * throttle * dt seconds
+    if (batteryLevel > 0.0f) applyBatteryLoss(drain, LOSS_THROTTLE);
+
+    // accumulate distance using world displacement
+    float dx = drone.pos[0] - prevDronePos[0];
+    float dy = drone.pos[1] - prevDronePos[1];
+    float dz = drone.pos[2] - prevDronePos[2];
+    float step = sqrtf(dx*dx + dy*dy + dz*dz);
+    distanceTraveled += step;
+
+    prevDronePos[0] = drone.pos[0];
+    prevDronePos[1] = drone.pos[1];
+    prevDronePos[2] = drone.pos[2];
+
+    // check battery empty
+    if (batteryLevel <= 0.0f) {
+        triggerGameOver();
+    }
+}
+
 // -----------------------------------------------------------
 //
 // Update Birds State
@@ -344,9 +460,16 @@ void updateBirds(float dt) {
 		float dist_x = CITY_CENTER[0] - b.pos[0];
 		float dist_y = CITY_CENTER[1] - b.pos[1];
 		float dist_z = CITY_CENTER[2] - b.pos[2];
-    	if (std::sqrt(dist_x*dist_x + dist_y*dist_y + dist_z*dist_z) <= 1.0f) {
-			drone = Drone(); // Reset drone
-		} 
+		if (std::sqrt(dist_x*dist_x + dist_y*dist_y + dist_z*dist_z) <= 1.0f) {
+			// apply battery penalty for hitting a bird and give a small bounce effect
+			if (collisionInvulnTimer <= 0.0f) {
+        		applyBatteryLoss(COLLISION_BATTERY_PENALTY, LOSS_BIRD);
+        		collisionInvulnTimer = COLLISION_INVULN_DURATION;
+				drone.collisionVel[1] = - drone.velocity[1] * 1.5f;
+				if (batteryLevel <= 0.0f) triggerGameOver();
+			}
+		}
+
     }
 }
 
@@ -420,6 +543,11 @@ void handleCollisions() {
 	if (droneBox.minY <= 0.0f) {
 		std::cout << "Collision with ground\n";
 		drone.collisionVel[1] = - drone.velocity[1] * 2.0f;
+		if (collisionInvulnTimer <= 0.0f) {
+			applyBatteryLoss(COLLISION_BATTERY_PENALTY, LOSS_GROUND);
+			collisionInvulnTimer = COLLISION_INVULN_DURATION;
+			if (batteryLevel <= 0.0f) triggerGameOver();
+		}
 		return;
 	}
 
@@ -443,7 +571,12 @@ void handleCollisions() {
 				std::cout << "Collision with building at (" << i << "," << j << ")\n";
 				float buildingPos[3] = {-15.0f + i * 20.0f, 0.0f, -15.0f + j * 20.0f};
 				computeNormalAfterCollision(buildingPos);
-				return;
+
+				if (collisionInvulnTimer <= 0.0f) {
+					applyBatteryLoss(COLLISION_BATTERY_PENALTY, LOSS_BUILDING);
+					collisionInvulnTimer = COLLISION_INVULN_DURATION;
+					if (batteryLevel <= 0.0f) triggerGameOver();
+				}
 			}
 		}
 	}
@@ -498,9 +631,17 @@ void updateDroneState(float dt) {
     drone.pos[1] += (drone.velocity[1] + drone.collisionVel[1]) * dt;
     drone.pos[2] += (drone.velocity[2] + drone.collisionVel[2]) * dt;
 
+	
 	drone.collisionVel[0] *= dampingFactor; if (fabs(drone.collisionVel[0]) < 0.01f) drone.collisionVel[0] = 0.0f;
 	drone.collisionVel[1] *= dampingFactor; if (fabs(drone.collisionVel[1]) < 0.01f) drone.collisionVel[1] = 0.0f;
 	drone.collisionVel[2] *= dampingFactor; if (fabs(drone.collisionVel[2]) < 0.01f) drone.collisionVel[2] = 0.0f;
+
+	// decrement invulnerability timer
+	if (collisionInvulnTimer > 0.0f) {
+		collisionInvulnTimer -= dt;
+		if (collisionInvulnTimer < 0.0f) collisionInvulnTimer = 0.0f;
+	}
+
 }
 
 
@@ -510,32 +651,34 @@ void updateDroneState(float dt) {
 //
 
 void applyKeyInputs(float dt) {
+	if (isGameOver) return;
+
     // Normal keys
     if (keyStates['w'] || keyStates['W']) {
-        drone.throttle +=  15.0f * dt;
+        drone.throttle +=  30.0f * dt;
     }
     if (keyStates['s'] || keyStates['S']) {
-        drone.throttle -=  15.0f * dt;
+        drone.throttle -=  30.0f * dt;
     }
     if (keyStates['a'] || keyStates['A']) {
-        drone.yaw += 60.0f * dt;
+        drone.yaw += 120.0f * dt;
     }
     if (keyStates['d'] || keyStates['D']) {
-        drone.yaw -= 60.0f * dt;
+        drone.yaw -= 120.0f * dt;
     }
 
     // Special keys
     if (specialKeyStates[GLUT_KEY_UP]) {
-        drone.pitch -= 60.0f * dt;
+        drone.pitch -= 120.0f * dt;
     }
     if (specialKeyStates[GLUT_KEY_DOWN]) {
-        drone.pitch += 60.0f * dt;
+        drone.pitch += 120.0f * dt;
     }
     if (specialKeyStates[GLUT_KEY_LEFT]) {
-        drone.roll  -= 60.0f * dt;
+        drone.roll  -= 120.0f * dt;
     }
     if (specialKeyStates[GLUT_KEY_RIGHT]) {
-        drone.roll  += 60.0f * dt;
+        drone.roll  += 120.0f * dt;
     }
 }
 
@@ -584,14 +727,24 @@ void processKeysDown(unsigned char key, int xx, int yy) {
 				printf("Headlights off");
 			}
 			break;
-		
-		
+		case 'p':
+			isPaused = !isPaused;
+			if (isPaused) {
+				memset(keyStates, 0, sizeof(keyStates));
+				memset(specialKeyStates, 0, sizeof(specialKeyStates));
+				printf("Game paused\n");
+			} else {
+				printf("Game resumed\n");
+			}
+			break;			
         case 'r':
             alpha = 57.0f; beta = 18.0f; r = 45.0f;
             camX = r * sin(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
             camZ = r * cos(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
             camY = r * sin(beta * 3.14f / 180.0f);
-            drone = Drone(); // reset drone state
+			// reset game state (drone, battery, distance, score)
+   			resetGameState();
+			printf("Game restarted/reset (R pressed)\n");
             break;
         case 'x': glEnable(GL_MULTISAMPLE); break;
         case 'z': glDisable(GL_MULTISAMPLE); break;
@@ -866,6 +1019,7 @@ void updatePointLightsFromBuildings()
     }
 }
 
+
 void renderSim(void) {
 	FrameCount++;
 
@@ -874,9 +1028,10 @@ void renderSim(void) {
 	float frameDt = (nowFrame - lastFrameTime) * 0.001f; // seconds
 	lastFrameTime = nowFrame;
 
-	// process input & update drone state immediately so lights/rendering use latest state
-	applyKeyInputs(frameDt);
-	updateDroneState(frameDt);
+	if (!isPaused && !isGameOver) {
+		applyKeyInputs(frameDt);
+		updateDroneState(frameDt);
+	}
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -1071,7 +1226,7 @@ void renderSim(void) {
 
 		// --- rest of your spotlight parameters (unchanged) ---
 		float intensity = 5.0f;
-		float sAmb[3]  = { 0.0f, 0.0f, 0.0f };
+		float sAmb[3]  = { 1.0f, 1.0f, 1.0f };
 		float sDiff[3] = { 1.0f * intensity, 1.0f * intensity, 1.0f * intensity };
 		float sSpec[3] = { 0.8f * intensity, 0.8f * intensity, 0.8f * intensity };
 
@@ -1160,17 +1315,26 @@ void renderSim(void) {
 	int nowBird = glutGet(GLUT_ELAPSED_TIME);
 	float dtBird = (nowBird - lastBirdTime) * 0.001f;
 	lastBirdTime = nowBird;
-	updateBirds(dtBird);
+	if (!isPaused) updateBirds(dtBird);
 
 	drawBirds(data);
 
 	//Update Drone State
 	static int lastTime = glutGet(GLUT_ELAPSED_TIME);
-    int now = glutGet(GLUT_ELAPSED_TIME);
-    float dt = (now - lastTime) * 0.001f;
+	int now = glutGet(GLUT_ELAPSED_TIME);
+	float dt = (now - lastTime) * 0.001f;
 	lastTime = now;
-    applyKeyInputs(dt);
-	updateDroneState(dt);
+
+	if (!isPaused && !isGameOver) {
+		updateBatteryAndDistance(dt);
+	} else if (!isPaused && isGameOver) {
+		if (drone.pos[1] <= 0.0f) {
+			drone.pos[1] = 0.0f;
+			drone.velocity[0] = 0.0f;
+			drone.velocity[1] = 0.0f;
+			drone.velocity[2] = 0.0f;
+		} else drone.pos[1] += DRONE_FALL_VELOCITY * dt;
+	} 
 
 	drawDrone(data);
 
@@ -1282,6 +1446,82 @@ void renderSim(void) {
 		mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
 		textCmd.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
 		renderer.renderText(textCmd);
+
+		// --- battery HUD (top-left) ---
+		char bufBattery[64];
+		int batteryPct = (int)roundf(batteryLevel * 100.0f);
+		snprintf(bufBattery, sizeof(bufBattery), "Battery: %d%%", batteryPct);
+
+		TextCommand battCmd;
+		battCmd.str = std::string(bufBattery);
+		battCmd.position[0] = 20;
+		battCmd.position[1] = (float)(m_viewport[3] - 30); // small margin from top
+		battCmd.size = 0.45f; // tweak visual size
+		battCmd.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+		battCmd.color[0] = 1.0f; battCmd.color[1] = 1.0f; battCmd.color[2] = 1.0f; battCmd.color[3] = 1.0f;
+		renderer.renderText(battCmd);
+
+		// simple battery bar right under text (immediate-mode 2D)
+		float barX = 20.0f;
+		float barY = (float)(m_viewport[3] - 60);
+		float barW = 200.0f;
+		float barH = 12.0f;
+
+		glPushAttrib(GL_ENABLE_BIT | GL_CURRENT_BIT);
+		glDisable(GL_DEPTH_TEST);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+		glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity();
+		glOrtho(0, m_viewport[2], 0, m_viewport[3], -1, 1);
+		glMatrixMode(GL_MODELVIEW); glPushMatrix(); glLoadIdentity();
+
+		// background
+		glColor4f(0.15f, 0.15f, 0.15f, 0.9f);
+		glBegin(GL_QUADS);
+		glVertex2f(barX, barY);
+		glVertex2f(barX + barW, barY);
+		glVertex2f(barX + barW, barY + barH);
+		glVertex2f(barX, barY + barH);
+		glEnd();
+
+		// fill
+		float fillW = barW * batteryLevel;
+		float rcol = (batteryLevel < 0.3f) ? 1.0f : 0.0f;
+		float gcol = (batteryLevel >= 0.5f) ? 1.0f : (batteryLevel < 0.3f ? 0.0f : (batteryLevel * 2.0f - 0.0f));
+		glColor4f(rcol, gcol, 0.0f, 1.0f);
+		glBegin(GL_QUADS);
+		glVertex2f(barX + 2.0f, barY + 2.0f);
+		glVertex2f(barX + 2.0f + fillW - 4.0f, barY + 2.0f);
+		glVertex2f(barX + 2.0f + fillW - 4.0f, barY + barH - 2.0f);
+		glVertex2f(barX + 2.0f, barY + barH - 2.0f);
+		glEnd();
+
+		glPopMatrix(); // MODELVIEW
+		glMatrixMode(GL_PROJECTION); glPopMatrix();
+		glPopAttrib();
+
+		// --- Game Over centered message ---
+		if (isGameOver) {
+			// simple center approximation: place text at center using WinX/WinY
+			TextCommand goCmd;
+			goCmd.str = std::string("GAME OVER\nPress R to restart");
+			goCmd.size = 0.9f;
+			// center position: bottom-left origin for renderText, do a simple estimate
+			goCmd.position[0] = (float)(WinX/2 - 160);
+			goCmd.position[1] = (float)(WinY/2 - 20);
+			goCmd.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+			goCmd.color[0] = 1.0f; goCmd.color[1] = 0.2f; goCmd.color[2] = 0.2f; goCmd.color[3] = 1.0f;
+			renderer.renderText(goCmd);
+		}
+
+
+		if (isPaused) {
+			TextCommand pauseCmd = { "PAUSED", { WinX/2 - 160, WinY/2 - 20 }, 0.9f };
+			pauseCmd.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+			renderer.renderText(pauseCmd);
+		}
+
 		mu.popMatrix(gmu::PROJECTION);
 		glDisable(GL_BLEND);
 		glEnable(GL_DEPTH_TEST);
@@ -1476,6 +1716,8 @@ int main(int argc, char **argv) {
 	ilInit();
 
 	buildScene();
+	resetGameState();
+
 
 	for (int i = 0; i < 6; ++i) {
 		for (int j = 0; j < 6; ++j) {
