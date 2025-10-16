@@ -173,6 +173,7 @@
     <None Include="shaders\ttf.vert" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="aabb_functions.h" />
     <ClInclude Include="cube.h" />
     <ClInclude Include="mathUtility.h" />
     <ClInclude Include="model.h" />

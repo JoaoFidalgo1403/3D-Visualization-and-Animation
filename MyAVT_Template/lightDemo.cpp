@@ -33,6 +33,8 @@
 #include <utility>  // for std::pair
 #include <ctime>    // for seeding rand()
 
+#include "aabb_functions.h"
+
 using namespace std;
 
 #define CAPTION "AVT - Lab Assignment 1"
@@ -144,11 +146,6 @@ struct Bird {
 };
 
 std::vector<Bird> birds;
-
-struct AABB {
-	float minX, minY, minZ;
-	float maxX, maxY, maxZ;
-};
 
 // --- Drone Parameters ---
 const float DRONE_WIDTH = 1.25f/2.0f;
@@ -336,13 +333,17 @@ void spawnPackage() {
 void checkPackagePickupAndDelivery() {
     if (!currentPackage.active) return;
 	// if not picked up: check drone proximity to package (package is static on roof)
+	
+	AABB droneBox = computeDroneAABB();
     if (!currentPackage.pickedUp) {
-        float dx = drone.pos[0] - currentPackage.pos[0];
+		AABB packageBox = computePackageAABB();
+		
+		float dx = drone.pos[0] - currentPackage.pos[0];
         float dy = drone.pos[1] - currentPackage.pos[1];
         float dz = drone.pos[2] - currentPackage.pos[2];
         float dist = sqrtf(dx*dx + dy*dy + dz*dz);
         const float pickupRadius = 2.0f; // tweak
-        if (dist <= pickupRadius && !isGameOver) {
+        if (checkCollision(droneBox, packageBox) && !isGameOver) {
             currentPackage.pickedUp = true;
        
             printf("[PACKAGE] picked up (attached, localOffset = %.2f, %.2f, %.2f)\n",
@@ -368,15 +369,11 @@ void checkPackagePickupAndDelivery() {
         // check delivery proximity to destination roof center using the computed world pos
         float dstCenter[3];
         buildingRoofCenter(currentPackage.dst_i, currentPackage.dst_j, dstCenter);
-        // measure horizontal distance and vertical closeness - allow some tolerance
-        float dx = currentPackage.pos[0] - dstCenter[0];
-        float dz = currentPackage.pos[2] - dstCenter[2];
-        float dy = currentPackage.pos[1] - (dstCenter[1] + 1.0f); // package target just above roof
-        float horizDist = sqrtf(dx*dx + dz*dz);
-        const float deliverHorizRadius = 2.5f;
-        const float deliverVertTol = 3.0f; // allow delivering from above within this vertical tolerance
 
-        if (horizDist <= deliverHorizRadius && fabsf(drone.pos[1] - dstCenter[1]) <= deliverVertTol) {
+		AABB deliveryBox = computeDeliveryAABB(dstCenter);
+        // measure horizontal distance and vertical closeness - allow some tolerance
+        
+        if (checkCollision(droneBox, deliveryBox)) {
             // delivered!
             int gained = (int)roundf(batteryLevel * 100.0f); // points proportional to remaining battery
             scorePoints += gained;
@@ -649,6 +646,36 @@ AABB computeBuildingAABB(int i, int j) {
     box.minZ = z;
     box.maxZ = z + depth;
     return box;
+}
+
+AABB computePackageAABB() {
+	AABB box;
+	float size = 7.0f; // Added margin for easier pickup
+	float x = currentPackage.pos[0];
+	float y = currentPackage.pos[1];
+	float z = currentPackage.pos[2];
+	box.minX = x - size / 2.0f;
+	box.maxX = x + size / 2.0f;
+	box.minY = y - size / 2.0f;
+	box.maxY = y + size / 2.0f;
+	box.minZ = z - size / 2.0f;
+	box.maxZ = z + size / 2.0f;
+	return box;
+}
+
+AABB computeDeliveryAABB(float center[3]) {
+	AABB box;
+	float size = 10.0f; // Added margin for easier delivery
+	float x = center[0];
+	float y = center[1];
+	float z = center[2];
+	box.minX = x - size / 2.0f;
+	box.maxX = x + size / 2.0f;
+	box.minY = y - size / 2.0f;
+	box.maxY = y + size / 2.0f;
+	box.minZ = z - size / 2.0f;
+	box.maxZ = z + size / 2.0f;
+	return box;
 }
 
 bool checkCollision(const AABB &a, const AABB &b) {
