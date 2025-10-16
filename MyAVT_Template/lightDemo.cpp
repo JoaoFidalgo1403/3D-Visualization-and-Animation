@@ -1628,13 +1628,10 @@ void renderSim(void) {
 	
 	if(fontLoaded) {
 		glDisable(GL_DEPTH_TEST);
-		TextCommand textCmd = { "Yaw: " + std::to_string(drone.yaw) + 
-								"\n\nPitch: " + std::to_string(drone.pitch) + 
-								"\n\nRoll: " + std::to_string(drone.roll) +
-								"\n\n\nThrottle: " + std::to_string(drone.throttle) +
-								"\n\n\nDirection: (" + std::to_string(drone.dir[0]) + ", " + std::to_string(drone.dir[1]) + ", " + std::to_string(drone.dir[2]) + ")" +
-								"\n\n\nVelocity: (" + std::to_string(drone.velocity[0]) + ", " + std::to_string(drone.velocity[1]) + ", " + std::to_string(drone.velocity[2]) + ")" +
-								"\n\n\nPosition: (" + std::to_string(drone.pos[0]) + ", " + std::to_string(drone.pos[1]) + ", " + std::to_string(drone.pos[2]) + ")", 
+		char distBuf[32];
+		snprintf(distBuf, sizeof(distBuf), "%.2f", distanceTraveled);
+		TextCommand textCmd = { std::string("Distance Flown: ") + distBuf +
+								"\n\nScore: " + std::to_string(scorePoints),
 								{30, 650}, 0.3f };
 		//the glyph contains transparent background colors and non-transparent for the actual character pixels. So we use the blending
 		glEnable(GL_BLEND);  

@@ -1,9 +1,9 @@
 {
   "Version": 1,
-  "WorkspaceRootPath": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\AVT_Project\\",
+  "WorkspaceRootPath": "C:\\Users\\tomas\\Desktop\\AVT\\AVT_Project\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\AVT_Project\\MyAVT_Template\\lightDemo.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "AbsoluteMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|C:\\Users\\tomas\\Desktop\\AVT\\AVT_Project\\MyAVT_Template\\lightDemo.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
       "RelativeMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|solutionrelative:MyAVT_Template\\lightDemo.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     }
   ],
@@ -20,11 +20,11 @@
               "$type": "Document",
               "DocumentIndex": 0,
               "Title": "lightDemo.cpp",
-              "DocumentMoniker": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\AVT_Project\\MyAVT_Template\\lightDemo.cpp",
+              "DocumentMoniker": "C:\\Users\\tomas\\Desktop\\AVT\\AVT_Project\\MyAVT_Template\\lightDemo.cpp",
               "RelativeDocumentMoniker": "MyAVT_Template\\lightDemo.cpp",
-              "ToolTip": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\AVT_Project\\MyAVT_Template\\lightDemo.cpp",
+              "ToolTip": "C:\\Users\\tomas\\Desktop\\AVT\\AVT_Project\\MyAVT_Template\\lightDemo.cpp",
               "RelativeToolTip": "MyAVT_Template\\lightDemo.cpp",
-              "ViewState": "AgIAAI4GAAAAAAAAAAAowK0GAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAAEEGAAAAAAAAAADwv2IGAAAaAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
               "WhenOpened": "2025-10-03T16:12:14.085Z",
               "EditorCaption": ""
