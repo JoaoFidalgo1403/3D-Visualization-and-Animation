@@ -319,6 +319,18 @@ void Renderer::setLightPos(float* lightPos) {
     glUniform4fv(lpos_loc, 1, lightPos);
 }
 
+void Renderer::setIsHud(bool isHud) {
+    GLint prevProg = 0;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &prevProg);
+
+    // make sure this->program is the shader that contains is_Hud
+    glUseProgram(program); // program is your shader program handle
+    GLint loc = glGetUniformLocation(program, "is_Hud");
+    if (loc != -1) glUniform1i(loc, isHud ? 1 : 0);
+
+    glUseProgram(prevProg); // restore previous
+}
+
 // helper
 static void safeNormalize3(float v[3]) {
     float len = sqrtf(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);

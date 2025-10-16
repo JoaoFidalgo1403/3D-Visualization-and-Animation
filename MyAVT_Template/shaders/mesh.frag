@@ -37,6 +37,8 @@ uniform bool plight_mode;       // Toggle point pointLights
 uniform bool headlights_mode;   // Toggle drone's headlights
 uniform bool fog_mode;          // Toggle on or off the fog
 uniform float spotCosCutOff;    // legacy cut-off cosine
+uniform bool is_Hud;            // Check if its the Hud
+uniform vec4 uHudColor;
 
 out vec4 colorOut;
 
@@ -154,13 +156,20 @@ void main() {
 
     vec3 result = vec3(0.0);
 
+    // debug early-out
+    if (is_Hud) {
+        // Unlit HUD color (no lighting, no fog)
+        colorOut = uHudColor;
+        return;
+    }
+
     // directional light
-    if (!night_mode) result += CalcDirLight(dirLight, n, viewDir);
+    if (!night_mode && !is_Hud) result += CalcDirLight(dirLight, n, viewDir);
 
     // point lights (use either numPointLights or 7)
     int pcount = (numPointLights > 0) ? numPointLights : 7;
     pcount = min(pcount, 7);
-    if (plight_mode) {
+    if (plight_mode && !is_Hud) {
         for (int i = 0; i < pcount; ++i) {
             result += CalcPointLight(pointLights[i], n, fragPos, viewDir);
         }
@@ -169,7 +178,7 @@ void main() {
     // spot lights (use either numSpotLights or 4)
     int scount = (numSpotLights > 0) ? numSpotLights : 4;
     scount = min(scount, 4);
-    if (headlights_mode) {
+    if (headlights_mode && !is_Hud) {
         for (int i = 0; i < scount; ++i) {
             result += CalcSpotLight(spotLights[i], n, fragPos, viewDir);
         }

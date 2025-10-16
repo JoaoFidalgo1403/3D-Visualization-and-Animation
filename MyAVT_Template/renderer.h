@@ -66,6 +66,8 @@ public:
 
   void setFogMode(bool fogMode);
 
+  void setIsHud(bool isHud);
+
   static const int MAX_POINT_LIGHTS = 7;
   static const int MAX_SPOT_LIGHTS = 4;
 

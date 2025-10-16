@@ -324,9 +324,9 @@ void spawnPackage() {
     currentPackage.pos[1] = center[1] + 2.0f; // a little above roof
 
 	// default local offset relative to drone when picked up (drone-local coords)
-    currentPackage.localPos[0] = - DRONE_WIDTH * 0.5f;
+    currentPackage.localPos[0] = - 0.2f;
     currentPackage.localPos[1] = -0.4f;
-    currentPackage.localPos[2] = - DRONE_DEPTH * 0.5f; 
+    currentPackage.localPos[2] = - 0.2f; 
 
     printf("[PACKAGE] spawned at (%d,%d) -> dest (%d,%d) at (%.1f, %.1f, %.1f)\n",
            s_i, s_j, d_i, d_j,
@@ -344,10 +344,7 @@ void checkPackagePickupAndDelivery() {
         const float pickupRadius = 2.0f; // tweak
         if (dist <= pickupRadius && !isGameOver) {
             currentPackage.pickedUp = true;
-            // keep the local offset where the package is attached (drone-local coords)
-            currentPackage.localPos[0] = - DRONE_WIDTH * 0.5f;
-            currentPackage.localPos[1] = -0.4f;
-            currentPackage.localPos[2] = - DRONE_DEPTH * 0.5f;
+       
             printf("[PACKAGE] picked up (attached, localOffset = %.2f, %.2f, %.2f)\n",
                    currentPackage.localPos[0], currentPackage.localPos[1], currentPackage.localPos[2]);
         }
@@ -1055,7 +1052,6 @@ void drawPackage(dataMesh &data) {
    // If attached -> draw using drone's MODEL transform so it rotates with the drone.
     mu.pushMatrix(gmu::MODEL);
     if (currentPackage.pickedUp) {
-        // apply drone transform (same order as drawDrone / spotlights)
         mu.translate(gmu::MODEL, drone.pos[0], drone.pos[1], drone.pos[2]);
         mu.rotate(gmu::MODEL, drone.yaw,   0, 1, 0);
         mu.rotate(gmu::MODEL, drone.pitch, 0, 0, 1);
@@ -1305,7 +1301,7 @@ void renderSim(void) {
 	mu.multMatrixPoint(gmu::VIEW, lightPos, lposAux);   //lightPos definido em World Coord so is converted to eye space
 	renderer.setLightPos(lposAux);
 
-	//Spotlight settings
+	//Light settings
 	renderer.setNightMode(night_mode);
 	renderer.setPLightMode(plight_mode);
 	renderer.setHeadlightsMode(headlights_mode);
@@ -1373,10 +1369,9 @@ void renderSim(void) {
 	// --- Spotlights  ---
 	for (int i = 0; i < NUM_SPOT_LIGHTS; ++i) {
 
-		// Push a MODEL matrix identical to what drawDrone() uses
 		mu.pushMatrix(gmu::MODEL);
 		mu.translate(gmu::MODEL, drone.pos[0], drone.pos[1], drone.pos[2]);
-		mu.rotate(gmu::MODEL, drone.yaw,   0, 1, 0); // same order as drawDrone
+		mu.rotate(gmu::MODEL, drone.yaw,   0, 1, 0);
 		mu.rotate(gmu::MODEL, drone.pitch, 0, 0, 1);
 		mu.rotate(gmu::MODEL, drone.roll,  1, 0, 0);
 
@@ -1550,7 +1545,6 @@ void renderSim(void) {
 
 	drawDrone(data);
 
-	// put this after drawDrone(data) and before text rendering
 	renderer.activateRenderMeshesShaderProg(); // ensure shader bound
 
 	// configure translucency
@@ -1659,60 +1653,6 @@ void renderSim(void) {
 		textCmd.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
 		renderer.renderText(textCmd);
 
-		// --- battery HUD (top-left) ---
-		char bufBattery[64];
-		int batteryPct = (int)roundf(batteryLevel * 100.0f);
-		snprintf(bufBattery, sizeof(bufBattery), "Battery: %d%%", batteryPct);
-
-		TextCommand battCmd;
-		battCmd.str = std::string(bufBattery);
-		battCmd.position[0] = 20;
-		battCmd.position[1] = (float)(m_viewport[3] - 30); // small margin from top
-		battCmd.size = 0.45f; // tweak visual size
-		battCmd.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
-		battCmd.color[0] = 1.0f; battCmd.color[1] = 1.0f; battCmd.color[2] = 1.0f; battCmd.color[3] = 1.0f;
-		renderer.renderText(battCmd);
-
-		// simple battery bar right under text (immediate-mode 2D)
-		float barX = 20.0f;
-		float barY = (float)(m_viewport[3] - 60);
-		float barW = 200.0f;
-		float barH = 12.0f;
-
-		glPushAttrib(GL_ENABLE_BIT | GL_CURRENT_BIT);
-		glDisable(GL_DEPTH_TEST);
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-		glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity();
-		glOrtho(0, m_viewport[2], 0, m_viewport[3], -1, 1);
-		glMatrixMode(GL_MODELVIEW); glPushMatrix(); glLoadIdentity();
-
-		// background
-		glColor4f(0.15f, 0.15f, 0.15f, 0.9f);
-		glBegin(GL_QUADS);
-		glVertex2f(barX, barY);
-		glVertex2f(barX + barW, barY);
-		glVertex2f(barX + barW, barY + barH);
-		glVertex2f(barX, barY + barH);
-		glEnd();
-
-		// fill
-		float fillW = barW * batteryLevel;
-		float rcol = (batteryLevel < 0.3f) ? 1.0f : 0.0f;
-		float gcol = (batteryLevel >= 0.5f) ? 1.0f : (batteryLevel < 0.3f ? 0.0f : (batteryLevel * 2.0f - 0.0f));
-		glColor4f(rcol, gcol, 0.0f, 1.0f);
-		glBegin(GL_QUADS);
-		glVertex2f(barX + 2.0f, barY + 2.0f);
-		glVertex2f(barX + 2.0f + fillW - 4.0f, barY + 2.0f);
-		glVertex2f(barX + 2.0f + fillW - 4.0f, barY + barH - 2.0f);
-		glVertex2f(barX + 2.0f, barY + barH - 2.0f);
-		glEnd();
-
-		glPopMatrix(); // MODELVIEW
-		glMatrixMode(GL_PROJECTION); glPopMatrix();
-		glPopAttrib();
-
 		// --- Game Over centered message ---
 		if (isGameOver) {
 			// simple center approximation: place text at center using WinX/WinY
@@ -1729,9 +1669,86 @@ void renderSim(void) {
 
 
 		if (isPaused) {
-			TextCommand pauseCmd = { "PAUSED", { WinX/2 - 160, WinY/2 - 20 }, 0.9f };
+			TextCommand pauseCmd = { "PAUSED", { WinX/2 - 160, WinY/2 - 20 }, 1.0f};
 			pauseCmd.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
 			renderer.renderText(pauseCmd);
+		}
+
+		// --- battery HUD (top-left) ---
+		float barX = 20.0f;
+		float barY = (float)(m_viewport[3] - 60);
+		float barW = 200.0f;
+		float barH = 12.0f;
+
+		renderer.activateRenderMeshesShaderProg();
+
+		// get currently bound program
+		GLint curProg = 0;
+		glGetIntegerv(GL_CURRENT_PROGRAM, &curProg);
+		if (curProg == 0) {
+			printf("No program bound — activateRenderMeshesShaderProg didn't bind.\n");
+		}
+
+		// get uniform locations (cache these in init for better perf)
+		GLint locIsHud   = glGetUniformLocation((GLuint)curProg, "is_Hud");
+		GLint locHudColor= glGetUniformLocation((GLuint)curProg, "uHudColor");
+
+		if (locIsHud != -1) {
+			glProgramUniform1i((GLuint)curProg, locIsHud, 1); // enable HUD mode
+		} else {
+			printf("Warning: is_Hud loc == -1\n");
+		}
+
+		glDisable(GL_CULL_FACE);
+
+		// --- draw background rect (unlit) ---
+		float bgCol[4] = {0.15f, 0.15f, 0.15f, 0.9f};
+		if (locHudColor != -1) {
+			glProgramUniform4fv((GLuint)curProg, locHudColor, 1, bgCol);
+		}
+
+		mu.pushMatrix(gmu::MODEL);
+		mu.translate(gmu::MODEL, barX + barW*0.5f, barY + barH*0.5f, 0.0f);
+		mu.scale(gmu::MODEL, barW, barH, 1.0f);
+		mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+		mu.computeNormalMatrix3x3();
+
+		data.meshID = 7;      // same mesh used for both rects is okay
+		data.texMode = 0;
+		data.vm  = mu.get(gmu::VIEW_MODEL);
+		data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+		data.normal = mu.getNormalMatrix();
+		renderer.renderMesh(data);
+		mu.popMatrix(gmu::MODEL);
+
+		// --- draw fill rect (unlit, set color BEFORE draw) ---
+		float fillW = barW * batteryLevel;
+		if (fillW < 4.0f) fillW = 4.0f;
+
+		float rcol = (batteryLevel < 0.3f) ? 1.0f : 0.0f;
+		float gcol = (batteryLevel >= 0.5f) ? 1.0f : (batteryLevel < 0.3f ? 0.0f : (batteryLevel * 2.0f));
+		float fillCol[4] = { rcol, gcol, 0.0f, 1.0f };
+
+		if (locHudColor != -1) {
+			glProgramUniform4fv((GLuint)curProg, locHudColor, 1, fillCol);
+		}
+
+		mu.pushMatrix(gmu::MODEL);
+		mu.translate(gmu::MODEL, barX + 2.0f + (fillW - 4.0f)*0.5f, barY + barH*0.5f, 0.0f);
+		mu.scale(gmu::MODEL, fillW - 4.0f, barH - 4.0f, 1.0f);
+		mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+		mu.computeNormalMatrix3x3();
+
+		data.vm  = mu.get(gmu::VIEW_MODEL);
+		data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+		renderer.renderMesh(data);
+		mu.popMatrix(gmu::MODEL);
+
+		glEnable(GL_CULL_FACE);
+
+		// disable HUD mode on shader
+		if (locIsHud != -1) {
+			glProgramUniform1i((GLuint)curProg, locIsHud, 0);
 		}
 
 		mu.popMatrix(gmu::PROJECTION);
@@ -1843,6 +1860,20 @@ void buildScene()
 	memcpy(amesh.mat.emissive, emissive, 4 * sizeof(float));
 	amesh.mat.shininess = shininess;
 	amesh.mat.texCount = 2;
+	renderer.myMeshes.push_back(amesh);
+
+	// create geometry and VAO of the HUD
+	amesh = createQuad(1.0f, 1.0f); 
+	float hudAmb[]   = {0.0f, 0.0f, 0.0f, 1.0f};
+	float hudDiff[]  = {1.0f, 1.0f, 1.0f, 1.0f};
+	float hudSpec[]  = {0.0f, 0.0f, 0.0f, 1.0f};
+	float hudEmiss[] = {1.0f, 1.0f, 1.0f, 1.0f};
+	memcpy(amesh.mat.ambient,  hudAmb,  4 * sizeof(float));
+	memcpy(amesh.mat.diffuse,  hudDiff, 4 * sizeof(float));
+	memcpy(amesh.mat.specular, hudSpec, 4 * sizeof(float));
+	memcpy(amesh.mat.emissive, hudEmiss, 4 * sizeof(float));
+	amesh.mat.shininess = 1.0f;
+	amesh.mat.texCount = 0;
 	renderer.myMeshes.push_back(amesh);
 
 	//The truetypeInit creates a texture object in TexObjArray for storing the fontAtlasTexture
