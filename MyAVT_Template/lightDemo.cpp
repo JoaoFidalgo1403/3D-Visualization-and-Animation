@@ -33,14 +33,6 @@
 #include <utility>  // for std::pair
 #include <ctime>    // for seeding rand()
 
-#include "meshFromAssimp.h"
-#include "Texture_Loader.h"
-
-#include <assimp/Importer.hpp>
-#include <assimp/scene.h>
-#include <assimp/postprocess.h>
-
-
 using namespace std;
 
 #define CAPTION "AVT - Lab Assignment 1"
@@ -183,12 +175,6 @@ struct Drone {
     float roll = 0.0f;     // Left/right tilt (degrees)
 };
 Drone drone;
-
-int droneModelStartIndex = -1;
-int droneModelMeshCount  = 0;
-float droneImportedScale = 1.0f;   // scale returned by Import3DFromFile
-std::string droneModelPath = "models/drone/drone.obj"; // path to your drone.obj
-
 
 
 // --- Package state ---
@@ -1109,77 +1095,40 @@ void drawBirds(dataMesh& data) {
 }
 
 void drawDrone(dataMesh &data) {
-	if (droneModelStartIndex >= 0 && droneModelMeshCount > 0) {
+    mu.pushMatrix(gmu::MODEL);
+	mu.translate(gmu::MODEL, drone.pos[0], drone.pos[1], drone.pos[2]);
+	mu.rotate(gmu::MODEL, drone.yaw,   0, 1, 0);
+    mu.rotate(gmu::MODEL, drone.pitch, 0, 0, 1);
+    mu.rotate(gmu::MODEL, drone.roll,  1, 0, 0);
+
+	for (int i = 0; i < 5; i++) {
+		if (i==0) {
+			data.meshID = 0;
+		} else {
+			data.meshID = 3;
+		}
 		mu.pushMatrix(gmu::MODEL);
-
-		// apply drone world transform (same as before)
-		mu.translate(gmu::MODEL, drone.pos[0], drone.pos[1], drone.pos[2]);
-		mu.rotate(gmu::MODEL, drone.yaw,   0, 1, 0);
-		mu.rotate(gmu::MODEL, drone.pitch, 0, 0, 1);
-		mu.rotate(gmu::MODEL, drone.roll,  1, 0, 0);
-
-		// scale the imported model to fit your drone size.
-		// droneImportedScale comes from the importer helper. multiply by an additional factor to fit your drone measure.
-		float desiredSize = 1.0f; // tweak this until model fits (try 0.5, 1.0, 2.0...)
-		float finalScale = droneImportedScale * desiredSize;
-		mu.scale(gmu::MODEL, finalScale, finalScale, finalScale);
+		mu.translate(gmu::MODEL, drone_parts_position[i].x / 2.0f, drone_parts_position[i].y / 2.0f, drone_parts_position[i].z / 2.0f);
+		if (i == 0) {
+			mu.scale(gmu::MODEL, DRONE_WIDTH, DRONE_HEIGHT, DRONE_DEPTH);
+		} else if (i > 0 && i < 3) {
+			mu.scale(gmu::MODEL, 0.25f, 0.0025f, 0.25f);
+		} else {
+			mu.scale(gmu::MODEL, 0.3125f, 0.025f, 0.3125f);
+		}
 
 		mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
 		mu.computeNormalMatrix3x3();
 
-		// Draw each mesh belonging to the imported drone
-		for (int i = 0; i < droneModelMeshCount; ++i) {
-			int meshIndex = droneModelStartIndex + i;
-			data.meshID = meshIndex;
+		data.texMode = 4;   //modulate diffuse color with texel color
+		data.vm = mu.get(gmu::VIEW_MODEL),
+		data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+		data.normal = mu.getNormalMatrix();
+		renderer.renderMesh(data);
 
-			// Keep texMode as you would for other meshes: usually 0..5 depending on how the mesh is set up.
-			data.texMode = renderer.myMeshes[meshIndex].mat.texCount > 0 ? 1 : 0;
-
-			data.vm  = mu.get(gmu::VIEW_MODEL);
-			data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
-			data.normal = mu.getNormalMatrix();
-
-			renderer.renderMesh(data);
-		}
-
-		mu.popMatrix(gmu::MODEL);
-		return;
-	} else {
-		mu.pushMatrix(gmu::MODEL);
-		mu.translate(gmu::MODEL, drone.pos[0], drone.pos[1], drone.pos[2]);
-		mu.rotate(gmu::MODEL, drone.yaw,   0, 1, 0);
-		mu.rotate(gmu::MODEL, drone.pitch, 0, 0, 1);
-		mu.rotate(gmu::MODEL, drone.roll,  1, 0, 0);
-
-		for (int i = 0; i < 5; i++) {
-			if (i==0) {
-				data.meshID = 0;
-			} else {
-				data.meshID = 3;
-			}
-			mu.pushMatrix(gmu::MODEL);
-			mu.translate(gmu::MODEL, drone_parts_position[i].x / 2.0f, drone_parts_position[i].y / 2.0f, drone_parts_position[i].z / 2.0f);
-			if (i == 0) {
-				mu.scale(gmu::MODEL, DRONE_WIDTH, DRONE_HEIGHT, DRONE_DEPTH);
-			} else if (i > 0 && i < 3) {
-				mu.scale(gmu::MODEL, 0.25f, 0.0025f, 0.25f);
-			} else {
-				mu.scale(gmu::MODEL, 0.3125f, 0.025f, 0.3125f);
-			}
-
-			mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
-			mu.computeNormalMatrix3x3();
-
-			data.texMode = 4;   //modulate diffuse color with texel color
-			data.vm = mu.get(gmu::VIEW_MODEL),
-			data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
-			data.normal = mu.getNormalMatrix();
-			renderer.renderMesh(data);
-
-			mu.popMatrix(gmu::MODEL);
-		}
 		mu.popMatrix(gmu::MODEL);
 	}
+	mu.popMatrix(gmu::MODEL);
 }
 
 // Place point lights at the top of the N tallest buildings
@@ -1924,31 +1873,6 @@ void buildScene()
 	amesh.mat.texCount = 0;
 	renderer.myMeshes.push_back(amesh);
 
-	// local importer & scene pointers (they can be local)
-    Assimp::Importer importerDrone;
-    const aiScene* sceneDrone = nullptr;
-    float scaleDrone = 1.0f;
-
-    if (!Import3DFromFile(droneModelPath, importerDrone, sceneDrone, scaleDrone)) {
-        printf("Warning: couldn't import drone model at '%s'\n", droneModelPath.c_str());
-    } else {
-        // create mesh array using helper (this will create VAOs and textures as the demo does)
-        GLuint* textureIdsDrone = nullptr;
-        std::vector<MyMesh> imported = createMeshFromAssimp(sceneDrone, textureIdsDrone);
-
-        // record where we append them in renderer.myMeshes
-        droneModelStartIndex = (int)renderer.myMeshes.size();
-        droneModelMeshCount = (int)imported.size();
-        droneImportedScale = scaleDrone; // store scale returned by importer
-
-        // append them to your renderer's mesh list
-        for (auto &m : imported) {
-            renderer.myMeshes.push_back(m);
-        }
-
-        printf("Imported drone model: %d meshes appended at index %d (scale=%.6f)\n",
-               droneModelMeshCount, droneModelStartIndex, droneImportedScale);
-
 	//The truetypeInit creates a texture object in TexObjArray for storing the fontAtlasTexture
 	
 	fontLoaded = renderer.truetypeInit(fontPathFile);
@@ -1963,7 +1887,6 @@ void buildScene()
 	camX = r * sin(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
 	camZ = r * cos(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
 	camY = r * sin(beta * 3.14f / 180.0f);
-	}
 }
 
 // ------------------------------------------------------------
