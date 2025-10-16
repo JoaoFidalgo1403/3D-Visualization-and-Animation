@@ -1,11 +1,11 @@
 ﻿  lightDemo.cpp
-C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\AVT_Project\MyAVT_Template\lightDemo.cpp(1445,107): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
-C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\AVT_Project\MyAVT_Template\lightDemo.cpp(1445,74): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
-C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\AVT_Project\MyAVT_Template\lightDemo.cpp(1445,57): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
-C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\AVT_Project\MyAVT_Template\lightDemo.cpp(1445,24): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
-C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\AVT_Project\MyAVT_Template\lightDemo.cpp(1520,48): warning C4838: conversion from 'int' to 'float' requires a narrowing conversion
-C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\AVT_Project\MyAVT_Template\lightDemo.cpp(1520,48): warning C4244: 'initializing': conversion from 'int' to 'float', possible loss of data
-C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\AVT_Project\MyAVT_Template\lightDemo.cpp(1520,62): warning C4838: conversion from 'int' to 'float' requires a narrowing conversion
-C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\AVT_Project\MyAVT_Template\lightDemo.cpp(1520,62): warning C4244: 'initializing': conversion from 'int' to 'float', possible loss of data
+C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\AVT_Project\MyAVT_Template\lightDemo.cpp(1670,107): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\AVT_Project\MyAVT_Template\lightDemo.cpp(1670,74): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\AVT_Project\MyAVT_Template\lightDemo.cpp(1670,57): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\AVT_Project\MyAVT_Template\lightDemo.cpp(1670,24): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\AVT_Project\MyAVT_Template\lightDemo.cpp(1745,48): warning C4838: conversion from 'int' to 'float' requires a narrowing conversion
+C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\AVT_Project\MyAVT_Template\lightDemo.cpp(1745,48): warning C4244: 'initializing': conversion from 'int' to 'float', possible loss of data
+C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\AVT_Project\MyAVT_Template\lightDemo.cpp(1745,62): warning C4838: conversion from 'int' to 'float' requires a narrowing conversion
+C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\AVT_Project\MyAVT_Template\lightDemo.cpp(1745,62): warning C4244: 'initializing': conversion from 'int' to 'float', possible loss of data
   MyAVT_Template.vcxproj -> C:\Users\joaof\Desktop\AVT_Project\MyAVT_Template\AVT_Project\x64\Debug\MyAVT_Template.exe
   0 File(s) copied

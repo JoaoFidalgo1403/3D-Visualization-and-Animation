@@ -176,6 +176,18 @@ struct Drone {
 };
 Drone drone;
 
+
+// --- Package state ---
+struct Package {
+    bool active = false;      // is a package present in the world?
+    bool pickedUp = false;    // is it currently attached to the drone?
+    int src_i = -1, src_j = -1;
+    int dst_i = -1, dst_j = -1;
+	float localPos[3]; // local position relative to drone when attached
+    float pos[3];             // world coords of package (when on roof or attached)
+} currentPackage;
+
+
 // --- City parameters ---
 const float CITY_CENTER[3] = {35.0f, 0.0f, 35.0f};
 
@@ -228,6 +240,7 @@ bool night_mode = false;
 bool plight_mode = true;
 bool headlights_mode = true;
 bool fog_mode = true;
+
 /// ::::::::::::::::::::::::::::::::::::::::::::::::CALLBACK FUNCIONS:::::::::::::::::::::::::::::::::::::::::::::::::://///
 
 void timer(int value)
@@ -255,6 +268,133 @@ void changeSize(int w, int h) {
 	mu.perspective(53.13f, ratio, 0.1f, 1000.0f);
 }
 
+// -----------------------------------------------------------
+//
+// Package Handling
+//
+
+// check whether building (i,j) is valid for package placement
+static bool isValidBuildingCell(int i, int j) {
+    if (i < 0 || i >= 6 || j < 0 || j >= 6) return false;
+    // skip open areas
+    for (auto &p : openAreas) if (p.first == i && p.second == j) return false;
+    // skip special blocked cell (your code already skipped these)
+    if ((i == 1 || i == 2) && j == 1) return false;
+    return true;
+}
+
+// get world coords for building roof center
+static void buildingRoofCenter(int i, int j, float out[3]) {
+    float x = -20.0f + i * 20.0f;
+    float z = -20.0f + j * 20.0f;
+    out[0] = x + BUILDING_WIDTH * 0.5f;
+    out[2] = z + BUILDING_DEPTH * 0.5f;
+    out[1] = cubeHeights[i][j]; // top of roof
+}
+
+void spawnPackage() {
+    // choose random valid source and destination (distinct)
+    int s_i, s_j, d_i, d_j;
+    const int MAX_TRIES = 200;
+    int tries = 0;
+    do {
+        s_i = rand() % 6; s_j = rand() % 6; ++tries;
+    } while ((!isValidBuildingCell(s_i, s_j)) && tries < MAX_TRIES);
+
+    tries = 0;
+    do {
+        d_i = rand() % 6; d_j = rand() % 6; ++tries;
+    } while (((!isValidBuildingCell(d_i, d_j)) || (d_i == s_i && d_j == s_j)) && tries < MAX_TRIES);
+
+    if (!isValidBuildingCell(s_i, s_j) || !isValidBuildingCell(d_i, d_j) || (s_i == d_i && s_j == d_j)) {
+        // fallback: no package this time
+        currentPackage.active = false;
+        return;
+    }
+
+    currentPackage.active = true;
+    currentPackage.pickedUp = false;
+    currentPackage.src_i = s_i; currentPackage.src_j = s_j;
+    currentPackage.dst_i = d_i; currentPackage.dst_j = d_j;
+
+    float center[3];
+    buildingRoofCenter(s_i, s_j, center);
+    currentPackage.pos[0] = center[0];
+    currentPackage.pos[2] = center[2];
+    currentPackage.pos[1] = center[1] + 2.0f; // a little above roof
+
+	// default local offset relative to drone when picked up (drone-local coords)
+    currentPackage.localPos[0] = - DRONE_WIDTH * 0.5f;
+    currentPackage.localPos[1] = -0.4f;
+    currentPackage.localPos[2] = - DRONE_DEPTH * 0.5f; 
+
+    printf("[PACKAGE] spawned at (%d,%d) -> dest (%d,%d) at (%.1f, %.1f, %.1f)\n",
+           s_i, s_j, d_i, d_j,
+           currentPackage.pos[0], currentPackage.pos[1], currentPackage.pos[2]);
+}
+
+void checkPackagePickupAndDelivery() {
+    if (!currentPackage.active) return;
+	// if not picked up: check drone proximity to package (package is static on roof)
+    if (!currentPackage.pickedUp) {
+        float dx = drone.pos[0] - currentPackage.pos[0];
+        float dy = drone.pos[1] - currentPackage.pos[1];
+        float dz = drone.pos[2] - currentPackage.pos[2];
+        float dist = sqrtf(dx*dx + dy*dy + dz*dz);
+        const float pickupRadius = 2.0f; // tweak
+        if (dist <= pickupRadius && !isGameOver) {
+            currentPackage.pickedUp = true;
+            // keep the local offset where the package is attached (drone-local coords)
+            currentPackage.localPos[0] = - DRONE_WIDTH * 0.5f;
+            currentPackage.localPos[1] = -0.4f;
+            currentPackage.localPos[2] = - DRONE_DEPTH * 0.5f;
+            printf("[PACKAGE] picked up (attached, localOffset = %.2f, %.2f, %.2f)\n",
+                   currentPackage.localPos[0], currentPackage.localPos[1], currentPackage.localPos[2]);
+        }
+    } else {
+        // package is attached: compute its world position from drone MODEL transform
+        float local4[4] = { currentPackage.localPos[0], currentPackage.localPos[1], currentPackage.localPos[2], 1.0f };
+        float world4[4];
+        mu.pushMatrix(gmu::MODEL);
+        mu.translate(gmu::MODEL, drone.pos[0], drone.pos[1], drone.pos[2]);
+        mu.rotate(gmu::MODEL, drone.yaw, 0, 1, 0);
+        mu.rotate(gmu::MODEL, drone.pitch, 0, 0, 1);
+        mu.rotate(gmu::MODEL, drone.roll, 1, 0, 0);
+        mu.multMatrixPoint(gmu::MODEL, local4, world4); // MODEL -> world
+        mu.popMatrix(gmu::MODEL);
+
+        // update stored world position (so draw/other code can use it)
+        currentPackage.pos[0] = world4[0];
+        currentPackage.pos[1] = world4[1];
+        currentPackage.pos[2] = world4[2];
+
+        // check delivery proximity to destination roof center using the computed world pos
+        float dstCenter[3];
+        buildingRoofCenter(currentPackage.dst_i, currentPackage.dst_j, dstCenter);
+        // measure horizontal distance and vertical closeness - allow some tolerance
+        float dx = currentPackage.pos[0] - dstCenter[0];
+        float dz = currentPackage.pos[2] - dstCenter[2];
+        float dy = currentPackage.pos[1] - (dstCenter[1] + 1.0f); // package target just above roof
+        float horizDist = sqrtf(dx*dx + dz*dz);
+        const float deliverHorizRadius = 2.5f;
+        const float deliverVertTol = 3.0f; // allow delivering from above within this vertical tolerance
+
+        if (horizDist <= deliverHorizRadius && fabsf(drone.pos[1] - dstCenter[1]) <= deliverVertTol) {
+            // delivered!
+            int gained = (int)roundf(batteryLevel * 100.0f); // points proportional to remaining battery
+            scorePoints += gained;
+            batteryLevel = 1.0f; // refill battery on delivery
+            printf("[PACKAGE] delivered to (%d,%d). +%d points. Battery refilled.\n",
+                   currentPackage.dst_i, currentPackage.dst_j, gained);
+
+            // spawn a new package immediately
+            currentPackage.active = false;
+            currentPackage.pickedUp = false;
+            spawnPackage();
+        }
+    }
+}
+
 // ------------------------------------------------------------
 //
 // Game State
@@ -275,6 +415,7 @@ void resetGameState() {
     prevDronePos[0] = drone.pos[0];
     prevDronePos[1] = drone.pos[1];
     prevDronePos[2] = drone.pos[2];
+	spawnPackage();
 
     // clear key states so no sticky input
     memset(keyStates, 0, sizeof(keyStates));
@@ -587,6 +728,11 @@ void handleCollisions() {
 //
 // Update Drone State
 //
+float wrapDegrees(float a) {
+		a = fmodf(a + 180.0f, 360.0f);
+		if (a < 0.0f) a += 360.0f;
+		return a - 180.0f;
+	}
 
 void updateDroneState(float dt) {
 	// Parameters (tweak to taste)
@@ -594,9 +740,8 @@ void updateDroneState(float dt) {
     const float maxTilt = 46.0f;            // degrees: maximum pitch/roll allowed
 	const float dampingFactor = 0.992f; // Reduce velocity by 50% on collision
 
-	
 	// Limits
-	if (drone.yaw > 360.0f || drone.yaw < -360.0f) drone.yaw = 0.0f;
+	drone.yaw = wrapDegrees(drone.yaw);
 
 	if (drone.pitch > maxTilt) drone.pitch = maxTilt;
 	if (drone.pitch < -maxTilt) drone.pitch = -maxTilt;
@@ -904,6 +1049,37 @@ void mouseWheel(int wheel, int direction, int x, int y) {
 // Render stuff
 //
 
+void drawPackage(dataMesh &data) {
+    if (!currentPackage.active) return;
+
+   // If attached -> draw using drone's MODEL transform so it rotates with the drone.
+    mu.pushMatrix(gmu::MODEL);
+    if (currentPackage.pickedUp) {
+        // apply drone transform (same order as drawDrone / spotlights)
+        mu.translate(gmu::MODEL, drone.pos[0], drone.pos[1], drone.pos[2]);
+        mu.rotate(gmu::MODEL, drone.yaw,   0, 1, 0);
+        mu.rotate(gmu::MODEL, drone.pitch, 0, 0, 1);
+        mu.rotate(gmu::MODEL, drone.roll,  1, 0, 0);
+        // local offset where package is attached (drone-local)
+        mu.translate(gmu::MODEL, currentPackage.localPos[0], currentPackage.localPos[1], currentPackage.localPos[2]);
+    } else {
+        mu.translate(gmu::MODEL, currentPackage.pos[0], currentPackage.pos[1], currentPackage.pos[2]);
+    }
+    mu.scale(gmu::MODEL, 0.4f, 0.4f, 0.4f); // package size
+    mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+    mu.computeNormalMatrix3x3();
+
+    data.meshID = 0; // Cube mesh
+    data.texMode = 0;
+    data.vm = mu.get(gmu::VIEW_MODEL);
+    data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+    data.normal = mu.getNormalMatrix();
+    renderer.renderMesh(data);
+
+    mu.popMatrix(gmu::MODEL);
+}
+
+
 void drawBirds(dataMesh& data) {
     data.meshID = 0; // Sphere mesh
     for (const auto& b : birds) {
@@ -1050,13 +1226,30 @@ void renderSim(void) {
 	switch (cameraMode) {
 		case THIRD:
 			{
-				// Compose final orbit angle as: drone yaw (in radians) + user offset (camOrbitAngle)
+				// smoothing yaw with shortest-path angular interpolation
 				const float DEG2RAD = 3.14159265f / 180.0f;
+				static float smoothYaw = 0.0f; // persistent across frames
+				const float smoothFactor = 0.08f; // your previous value
+
+
 				float yawRad = drone.yaw * DEG2RAD;
 
-				static float smoothYaw = 0.0f;
-				const float smoothFactor = 0.08f; // larger = snappier, smaller = smoother
-				smoothYaw = smoothYaw + (yawRad - smoothYaw) * smoothFactor;
+
+				// compute signed shortest angular difference in [-pi, +pi]
+				auto shortestAngularDifference = [](float target, float current) {
+				float diff = target - current;
+				const float PI = 3.14159265f;
+				const float TWO_PI = 2.0f * PI;
+				while (diff <= -PI) diff += TWO_PI;
+				while (diff > PI) diff -= TWO_PI;
+				return diff;
+				};
+
+
+				float diff = shortestAngularDifference(yawRad, smoothYaw);
+				smoothYaw += diff * smoothFactor; // move along shortest arc
+
+
 				float finalAngle = camOrbitAngle - (camOrbitFollowYaw ? smoothYaw : 0.0f);
 
 				// compute camera offset in drone-local world coords (orbit around Y)
@@ -1248,7 +1441,6 @@ void renderSim(void) {
 	}
 
 
-
 	// Draw the terrain - myMeshes[6] contains the Quad object
 	mu.pushMatrix(gmu::MODEL);
 	mu.translate(gmu::MODEL, 0.0f, 0.0f, 0.0f);
@@ -1304,7 +1496,23 @@ void renderSim(void) {
 			data.vm = mu.get(gmu::VIEW_MODEL),
 			data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
 			data.normal = mu.getNormalMatrix();
+
+			// highlight package source/destination: temporarily modify the cube's diffuse color
+			float savedDiffuse[4];
+			memcpy(savedDiffuse, renderer.myMeshes[0].mat.diffuse, sizeof(savedDiffuse));
+
+			if (currentPackage.active && !currentPackage.pickedUp && i == currentPackage.src_i && j == currentPackage.src_j) {
+				float col[4] = {0.2f, 1.0f, 0.2f, 1.0f}; // green = source
+				memcpy(renderer.myMeshes[0].mat.diffuse, col, sizeof(col));
+			} else if (currentPackage.active && currentPackage.dst_i == i && currentPackage.dst_j == j) {
+				float col[4] = {1.0f, 0.2f, 0.2f, 1.0f}; // red = destination
+				memcpy(renderer.myMeshes[0].mat.diffuse, col, sizeof(col));
+			}
+
 			renderer.renderMesh(data);
+
+			// restore original diffuse so other objects not affected
+			memcpy(renderer.myMeshes[0].mat.diffuse, savedDiffuse, sizeof(savedDiffuse));
 
 			mu.popMatrix(gmu::MODEL);
 		}
@@ -1318,6 +1526,10 @@ void renderSim(void) {
 	if (!isPaused) updateBirds(dtBird);
 
 	drawBirds(data);
+
+	// package logic update/check
+	checkPackagePickupAndDelivery();
+	drawPackage(data);
 
 	//Update Drone State
 	static int lastTime = glutGet(GLUT_ELAPSED_TIME);
@@ -1716,8 +1928,6 @@ int main(int argc, char **argv) {
 	ilInit();
 
 	buildScene();
-	resetGameState();
-
 
 	for (int i = 0; i < 6; ++i) {
 		for (int j = 0; j < 6; ++j) {
@@ -1739,6 +1949,7 @@ int main(int argc, char **argv) {
 	}
 
 	updatePointLightsFromBuildings();
+	resetGameState();
 	printPointLightsAndDrone(); // print initial positions for debugging
 
 	if(!renderer.setRenderMeshesShaderProg("shaders/mesh.vert", "shaders/mesh.frag") || 
