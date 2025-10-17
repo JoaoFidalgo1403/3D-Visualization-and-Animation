@@ -1812,15 +1812,6 @@ void buildScene()
 	int texcount = 0;
 
 
-    // Try to load external drone model
-    int first = renderer.loadModelWithAssimp("assets/drone.obj", gDroneModelMeshCount);
-    if (first >= 0) {
-        gDroneModelFirstMesh = first;
-        printf("Loaded drone model: %d meshes starting at index %d\n", gDroneModelMeshCount, gDroneModelFirstMesh);
-    } else {
-        printf("No external drone model found. Using primitive drone.\n");
-    }
-
     // create geometry and VAO of the cube
 	amesh = createCube();
 	memcpy(amesh.mat.ambient, amb1, 4 * sizeof(float));
@@ -1905,6 +1896,15 @@ void buildScene()
 	amesh.mat.shininess = 1.0f;
 	amesh.mat.texCount = 0;
 	renderer.myMeshes.push_back(amesh);
+
+    // Finally, load drone OBJ so its meshes are appended after primitives
+    int first = renderer.loadModelWithAssimp("assets/drone.obj", gDroneModelMeshCount);
+    if (first >= 0) {
+        gDroneModelFirstMesh = first;
+        printf("Loaded drone model: %d meshes starting at index %d\n", gDroneModelMeshCount, gDroneModelFirstMesh);
+    } else {
+        printf("No external drone model found. Using primitive drone.\n");
+    }
 
 	//The truetypeInit creates a texture object in TexObjArray for storing the fontAtlasTexture
 	
