@@ -86,6 +86,8 @@ public:
 
   void setTexUnit(int tuId, int texObjId);
 
+  // GLuint getTextureIdFromUnit(int tu) const; // returns GL texture id stored for TU
+
 
 
   //Vector with meshes
@@ -103,6 +105,11 @@ private:
   GLuint textProgram;
 
   GLint pvm_loc, vm_loc, normal_loc, lpos_loc, texMode_loc;
+
+  GLint useNormalMap_loc = -1;
+  GLint useSpecularMap_loc = -1;
+  GLint diffMapCount_loc = -1;
+
   GLint tex_loc[MAX_TEXTURES];
   
   // Directional light uniform locations
@@ -129,7 +136,7 @@ private:
   GLint spot_linear_loc[MAX_SPOT_LIGHTS];
   GLint spot_quadratic_loc[MAX_SPOT_LIGHTS];
 
-  // global count uniform locations (optional)
+  // global count uniform locations
   GLint num_point_lights_loc = -1;
   GLint num_spot_lights_loc  = -1;
 

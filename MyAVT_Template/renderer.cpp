@@ -145,6 +145,8 @@ bool Renderer::setRenderMeshesShaderProg(const std::string& vertShaderPath, cons
     glBindAttribLocation(program, Shader::VERTEX_COORD_ATTRIB, "position");
     glBindAttribLocation(program, Shader::NORMAL_ATTRIB, "normal");
     glBindAttribLocation(program, Shader::TEXTURE_COORD_ATTRIB, "texCoord");
+    glBindAttribLocation(program, Shader::TANGENT_ATTRIB, "tangent");
+	glBindAttribLocation(program, Shader::BITANGENT_ATTRIB, "bitangent");
 
     glLinkProgram(program);
 
@@ -157,10 +159,17 @@ bool Renderer::setRenderMeshesShaderProg(const std::string& vertShaderPath, cons
     normal_loc = glGetUniformLocation(program, "m_normal");
     texMode_loc = glGetUniformLocation(program, "texMode"); // different modes of texturing
     lpos_loc = glGetUniformLocation(program, "l_pos");
+    
     tex_loc[0] = glGetUniformLocation(program, "texmap");
     tex_loc[1] = glGetUniformLocation(program, "texmap1");
     tex_loc[2] = glGetUniformLocation(program, "texmap2");
     tex_loc[3] = glGetUniformLocation(program, "texmap3");
+    tex_loc[4] = glGetUniformLocation(program, "texUnitSpec");    // optional spec map
+    tex_loc[5] = glGetUniformLocation(program, "texUnitNormal");  // optional normal map
+
+    useNormalMap_loc   = glGetUniformLocation(program, "useNormalMap");    // bool/int
+    useSpecularMap_loc = glGetUniformLocation(program, "useSpecularMap");  // bool/int
+    diffMapCount_loc   = glGetUniformLocation(program, "diffMapCount");    // int
 
 
     // --- query directional light uniforms ---
@@ -531,5 +540,9 @@ void Renderer::renderText(const TextCommand& text) {
         }
     }
 }
+
+// GLuint Renderer::getTextureIdFromUnit(int tu) const {
+    // return TexObjArray.getTextureId(tu);
+// }
 
 
