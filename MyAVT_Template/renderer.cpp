@@ -480,6 +480,18 @@ void Renderer::renderMesh(const dataMesh& data) {
     loc = glGetUniformLocation(program, "mat.shininess");
     glUniform1f(loc, myMeshes[data.meshID].mat.shininess);
 
+    // If this mesh carries its own textures (e.g., from MTL), bind them now
+    const MyMesh &mesh = myMeshes[data.meshID];
+    int meshTexCount = mesh.mat.texCount;
+    if (meshTexCount > 0) {
+        // Bind up to MAX_TEXTURES starting at unit 0
+        for (int i = 0; i < meshTexCount && i < MAX_TEXTURES; ++i) {
+            glActiveTexture(GL_TEXTURE0 + i);
+            glBindTexture(GL_TEXTURE_2D, mesh.texUnits[i]); // texUnits holds GL texture IDs
+            glUniform1i(tex_loc[i], i);
+        }
+    }
+
     // Render mesh
     glUniform1i(texMode_loc, data.texMode);
 
@@ -655,9 +667,40 @@ int Renderer::loadModelWithAssimp(const std::string &filepath, int &outMeshCount
 
         amesh.type = GL_TRIANGLES;
 
-        // material
+        // material and textures (from MTL)
         if (scene->HasMaterials() && mesh->mMaterialIndex < scene->mNumMaterials) {
-            fillMaterialFromAi(scene->mMaterials[mesh->mMaterialIndex], amesh.mat);
+            const aiMaterial* aimat = scene->mMaterials[mesh->mMaterialIndex];
+            fillMaterialFromAi(aimat, amesh.mat);
+
+            // Load diffuse textures from MTL, if any
+            unsigned int texCount = aimat->GetTextureCount(aiTextureType_DIFFUSE);
+            amesh.mat.texCount = 0;
+            for (unsigned int ti = 0; ti < texCount && ti < MAX_TEXTURES; ++ti) {
+                aiString path;
+                if (AI_SUCCESS == aimat->GetTexture(aiTextureType_DIFFUSE, ti, &path)) {
+                    // Handle embedded textures vs external files
+                    if (const aiTexture* emb = scene->GetEmbeddedTexture(path.C_Str())) {
+                        // Embedded (compressed or raw) — not handled in this minimal path
+                        // Fallback: ignore embedded for now
+                    } else {
+                        // External file — path is relative to the OBJ
+                        std::string dir;
+                        size_t slash = filepath.find_last_of("/\\");
+                        if (slash != std::string::npos) dir = filepath.substr(0, slash+1);
+                        std::string texPath = dir + std::string(path.C_Str());
+                        // Create texture object via existing Texture loader
+                        int before = TexObjArray.getNumTextureObjects();
+                        TexObjArray.texture2D_Loader(texPath.c_str());
+                        int after = TexObjArray.getNumTextureObjects();
+                        if (after > before) {
+                            GLuint texId = TexObjArray.getTextureId(after - 1);
+                            amesh.texUnits[amesh.mat.texCount] = texId;
+                            amesh.texTypes[amesh.mat.texCount] = DIFFUSE;
+                            amesh.mat.texCount++;
+                        }
+                    }
+                }
+            }
         } else {
             float amb[4] = {0.2f,0.2f,0.2f,1.0f};
             float dif[4] = {0.8f,0.8f,0.8f,1.0f};

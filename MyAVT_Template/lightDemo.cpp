@@ -1113,7 +1113,7 @@ void drawDrone(dataMesh &data) {
         mu.scale(gmu::MODEL, gDroneModelScale, gDroneModelScale, gDroneModelScale);
         mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
         mu.computeNormalMatrix3x3();
-        data.texMode = 0;
+        data.texMode = 4; // use texmap3 bound to assets/drone.jpg
         for (int i = 0; i < gDroneModelMeshCount; ++i) {
             data.meshID = gDroneModelFirstMesh + i;
             data.vm = mu.get(gmu::VIEW_MODEL);
