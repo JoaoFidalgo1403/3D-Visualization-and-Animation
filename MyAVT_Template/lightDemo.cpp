@@ -75,6 +75,10 @@ Renderer renderer;
 // Object of class model to manage the loading of meshes from OBJ files
 bool fontLoaded = false;
 
+// Drone model indices when loaded via Assimp
+int gDroneModelFirstMesh = -1;
+int gDroneModelMeshCount = 0;
+
 // --- Utility structures and functions ---
 
 // 3D Vector
@@ -1096,39 +1100,58 @@ void drawBirds(dataMesh& data) {
 
 void drawDrone(dataMesh &data) {
     mu.pushMatrix(gmu::MODEL);
-	mu.translate(gmu::MODEL, drone.pos[0], drone.pos[1], drone.pos[2]);
-	mu.rotate(gmu::MODEL, drone.yaw,   0, 1, 0);
+    mu.translate(gmu::MODEL, drone.pos[0], drone.pos[1], drone.pos[2]);
+    mu.rotate(gmu::MODEL, drone.yaw,   0, 1, 0);
     mu.rotate(gmu::MODEL, drone.pitch, 0, 0, 1);
     mu.rotate(gmu::MODEL, drone.roll,  1, 0, 0);
 
-	for (int i = 0; i < 5; i++) {
-		if (i==0) {
-			data.meshID = 0;
-		} else {
-			data.meshID = 3;
-		}
-		mu.pushMatrix(gmu::MODEL);
-		mu.translate(gmu::MODEL, drone_parts_position[i].x / 2.0f, drone_parts_position[i].y / 2.0f, drone_parts_position[i].z / 2.0f);
-		if (i == 0) {
-			mu.scale(gmu::MODEL, DRONE_WIDTH, DRONE_HEIGHT, DRONE_DEPTH);
-		} else if (i > 0 && i < 3) {
-			mu.scale(gmu::MODEL, 0.25f, 0.0025f, 0.25f);
-		} else {
-			mu.scale(gmu::MODEL, 0.3125f, 0.025f, 0.3125f);
-		}
+    if (gDroneModelFirstMesh >= 0 && gDroneModelMeshCount > 0) {
+        // Render imported drone model
+        mu.pushMatrix(gmu::MODEL);
+        // scale/offset to fit scene if needed
+        mu.scale(gmu::MODEL, 1.0f, 1.0f, 1.0f);
+        mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+        mu.computeNormalMatrix3x3();
+        data.texMode = 0;
+        for (int i = 0; i < gDroneModelMeshCount; ++i) {
+            data.meshID = gDroneModelFirstMesh + i;
+            data.vm = mu.get(gmu::VIEW_MODEL);
+            data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+            data.normal = mu.getNormalMatrix();
+            renderer.renderMesh(data);
+        }
+        mu.popMatrix(gmu::MODEL);
+    } else {
+        // Fallback primitive drone
+        for (int i = 0; i < 5; i++) {
+            if (i==0) {
+                data.meshID = 0;
+            } else {
+                data.meshID = 3;
+            }
+            mu.pushMatrix(gmu::MODEL);
+            mu.translate(gmu::MODEL, drone_parts_position[i].x / 2.0f, drone_parts_position[i].y / 2.0f, drone_parts_position[i].z / 2.0f);
+            if (i == 0) {
+                mu.scale(gmu::MODEL, DRONE_WIDTH, DRONE_HEIGHT, DRONE_DEPTH);
+            } else if (i > 0 && i < 3) {
+                mu.scale(gmu::MODEL, 0.25f, 0.0025f, 0.25f);
+            } else {
+                mu.scale(gmu::MODEL, 0.3125f, 0.025f, 0.3125f);
+            }
 
-		mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
-		mu.computeNormalMatrix3x3();
+            mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+            mu.computeNormalMatrix3x3();
 
-		data.texMode = 4;   //modulate diffuse color with texel color
-		data.vm = mu.get(gmu::VIEW_MODEL),
-		data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
-		data.normal = mu.getNormalMatrix();
-		renderer.renderMesh(data);
+            data.texMode = 4;
+            data.vm = mu.get(gmu::VIEW_MODEL);
+            data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+            data.normal = mu.getNormalMatrix();
+            renderer.renderMesh(data);
 
-		mu.popMatrix(gmu::MODEL);
-	}
-	mu.popMatrix(gmu::MODEL);
+            mu.popMatrix(gmu::MODEL);
+        }
+    }
+    mu.popMatrix(gmu::MODEL);
 }
 
 // Place point lights at the top of the N tallest buildings
@@ -1788,7 +1811,16 @@ void buildScene()
 	int texcount = 0;
 
 
-	// create geometry and VAO of the cube
+    // Try to load external drone model
+    int first = renderer.loadModelWithAssimp("assets/drone.obj", gDroneModelMeshCount);
+    if (first >= 0) {
+        gDroneModelFirstMesh = first;
+        printf("Loaded drone model: %d meshes starting at index %d\n", gDroneModelMeshCount, gDroneModelFirstMesh);
+    } else {
+        printf("No external drone model found. Using primitive drone.\n");
+    }
+
+    // create geometry and VAO of the cube
 	amesh = createCube();
 	memcpy(amesh.mat.ambient, amb1, 4 * sizeof(float));
 	memcpy(amesh.mat.diffuse, diff1, 4 * sizeof(float));

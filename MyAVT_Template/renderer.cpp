@@ -6,6 +6,13 @@
 #include "renderer.h"
 #include "mathUtility.h"
 #include "shader.h"
+#include <vector>
+#include <string>
+
+// Assimp
+#include "Dependencies/assimp/include/assimp/Importer.hpp"
+#include "Dependencies/assimp/include/assimp/scene.h"
+#include "Dependencies/assimp/include/assimp/postprocess.h"
 
 #define STB_RECT_PACK_IMPLEMENTATION
 #define STB_TRUETYPE_IMPLEMENTATION
@@ -533,3 +540,138 @@ void Renderer::renderText(const TextCommand& text) {
 }
 
 
+
+static void fillMaterialFromAi(const aiMaterial* aimat, Material &outMat) {
+    aiColor4D c;
+    if (AI_SUCCESS == aiGetMaterialColor(aimat, AI_MATKEY_COLOR_AMBIENT, &c)) {
+        outMat.ambient[0]=c.r; outMat.ambient[1]=c.g; outMat.ambient[2]=c.b; outMat.ambient[3]=c.a;
+    } else { outMat.ambient[0]=0.2f; outMat.ambient[1]=0.2f; outMat.ambient[2]=0.2f; outMat.ambient[3]=1.0f; }
+    if (AI_SUCCESS == aiGetMaterialColor(aimat, AI_MATKEY_COLOR_DIFFUSE, &c)) {
+        outMat.diffuse[0]=c.r; outMat.diffuse[1]=c.g; outMat.diffuse[2]=c.b; outMat.diffuse[3]=c.a;
+    } else { outMat.diffuse[0]=0.8f; outMat.diffuse[1]=0.8f; outMat.diffuse[2]=0.8f; outMat.diffuse[3]=1.0f; }
+    if (AI_SUCCESS == aiGetMaterialColor(aimat, AI_MATKEY_COLOR_SPECULAR, &c)) {
+        outMat.specular[0]=c.r; outMat.specular[1]=c.g; outMat.specular[2]=c.b; outMat.specular[3]=c.a;
+    } else { outMat.specular[0]=0.2f; outMat.specular[1]=0.2f; outMat.specular[2]=0.2f; outMat.specular[3]=1.0f; }
+    float shin = 32.0f; aiGetMaterialFloat(aimat, AI_MATKEY_SHININESS, &shin);
+    outMat.shininess = shin;
+    outMat.texCount = 0;
+}
+
+int Renderer::loadModelWithAssimp(const std::string &filepath, int &outMeshCount) {
+    outMeshCount = 0;
+    Assimp::Importer importer;
+    const aiScene* scene = importer.ReadFile(filepath.c_str(),
+        aiProcess_Triangulate |
+        aiProcess_GenSmoothNormals |
+        aiProcess_JoinIdenticalVertices |
+        aiProcess_ImproveCacheLocality |
+        aiProcess_SortByPType |
+        aiProcess_OptimizeMeshes |
+        aiProcess_GenUVCoords |
+        aiProcess_TransformUVCoords |
+        aiProcess_CalcTangentSpace);
+
+    if (!scene || !scene->HasMeshes()) {
+        std::cerr << "Assimp failed to load: " << filepath << "\n";
+        return -1;
+    }
+
+    int firstIndex = static_cast<int>(myMeshes.size());
+
+    for (unsigned int m = 0; m < scene->mNumMeshes; ++m) {
+        const aiMesh* mesh = scene->mMeshes[m];
+        if (!mesh->HasPositions()) continue;
+
+        std::vector<float> vertices;
+        std::vector<float> normals;
+        std::vector<float> texcoords;
+        std::vector<float> tangents;
+        std::vector<unsigned int> indices;
+
+        vertices.reserve(mesh->mNumVertices * 4);
+        normals.reserve(mesh->mNumVertices * 4);
+        texcoords.reserve(mesh->mNumVertices * 4);
+        tangents.reserve(mesh->mNumVertices * 4);
+
+        for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
+            const aiVector3D &v = mesh->mVertices[i];
+            vertices.push_back(v.x); vertices.push_back(v.y); vertices.push_back(v.z); vertices.push_back(1.0f);
+
+            if (mesh->HasNormals()) {
+                const aiVector3D &n = mesh->mNormals[i];
+                normals.push_back(n.x); normals.push_back(n.y); normals.push_back(n.z); normals.push_back(0.0f);
+            } else { normals.insert(normals.end(), {0.f,1.f,0.f,0.f}); }
+
+            if (mesh->HasTextureCoords(0)) {
+                const aiVector3D &t = mesh->mTextureCoords[0][i];
+                texcoords.push_back(t.x); texcoords.push_back(t.y); texcoords.push_back(0.0f); texcoords.push_back(1.0f);
+            } else { texcoords.insert(texcoords.end(), {0.f,0.f,0.f,1.f}); }
+
+            if (mesh->HasTangentsAndBitangents()) {
+                const aiVector3D &tg = mesh->mTangents[i];
+                tangents.push_back(tg.x); tangents.push_back(tg.y); tangents.push_back(tg.z); tangents.push_back(1.0f);
+            } else { tangents.insert(tangents.end(), {1.f,0.f,0.f,1.f}); }
+        }
+
+        for (unsigned int f = 0; f < mesh->mNumFaces; ++f) {
+            const aiFace &face = mesh->mFaces[f];
+            if (face.mNumIndices == 3) {
+                indices.push_back(face.mIndices[0]);
+                indices.push_back(face.mIndices[1]);
+                indices.push_back(face.mIndices[2]);
+            }
+        }
+
+        MyMesh amesh{};
+        amesh.numIndexes = static_cast<GLuint>(indices.size());
+
+        GLuint vbo[2];
+        glGenVertexArrays(1, &amesh.vao);
+        glBindVertexArray(amesh.vao);
+        glGenBuffers(2, vbo);
+        glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
+        size_t vertsSize = vertices.size()*sizeof(float);
+        size_t normsSize = normals.size()*sizeof(float);
+        size_t uvsSize   = texcoords.size()*sizeof(float);
+        size_t tangSize  = tangents.size()*sizeof(float);
+        glBufferData(GL_ARRAY_BUFFER, vertsSize+normsSize+uvsSize+tangSize, nullptr, GL_STATIC_DRAW);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, vertsSize, vertices.data());
+        glBufferSubData(GL_ARRAY_BUFFER, vertsSize, normsSize, normals.data());
+        glBufferSubData(GL_ARRAY_BUFFER, vertsSize+normsSize, uvsSize, texcoords.data());
+        glBufferSubData(GL_ARRAY_BUFFER, vertsSize+normsSize+uvsSize, tangSize, tangents.data());
+
+        glEnableVertexAttribArray(Shader::VERTEX_COORD_ATTRIB);
+        glVertexAttribPointer(Shader::VERTEX_COORD_ATTRIB, 4, GL_FLOAT, 0, 0, 0);
+        glEnableVertexAttribArray(Shader::NORMAL_ATTRIB);
+        glVertexAttribPointer(Shader::NORMAL_ATTRIB, 4, GL_FLOAT, 0, 0, (void*)vertsSize);
+        glEnableVertexAttribArray(Shader::TEXTURE_COORD_ATTRIB);
+        glVertexAttribPointer(Shader::TEXTURE_COORD_ATTRIB, 4, GL_FLOAT, 0, 0, (void*)(vertsSize+normsSize));
+        glEnableVertexAttribArray(Shader::TANGENT_ATTRIB);
+        glVertexAttribPointer(Shader::TANGENT_ATTRIB, 4, GL_FLOAT, 0, 0, (void*)(vertsSize+normsSize+uvsSize));
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[1]);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size()*sizeof(unsigned int), indices.data(), GL_STATIC_DRAW);
+        glBindVertexArray(0);
+
+        amesh.type = GL_TRIANGLES;
+
+        // material
+        if (scene->HasMaterials() && mesh->mMaterialIndex < scene->mNumMaterials) {
+            fillMaterialFromAi(scene->mMaterials[mesh->mMaterialIndex], amesh.mat);
+        } else {
+            float amb[4] = {0.2f,0.2f,0.2f,1.0f};
+            float dif[4] = {0.8f,0.8f,0.8f,1.0f};
+            float spe[4] = {0.2f,0.2f,0.2f,1.0f};
+            memcpy(amesh.mat.ambient, amb, sizeof(amb));
+            memcpy(amesh.mat.diffuse, dif, sizeof(dif));
+            memcpy(amesh.mat.specular, spe, sizeof(spe));
+            amesh.mat.shininess = 32.0f;
+            amesh.mat.texCount = 0;
+        }
+
+        myMeshes.push_back(amesh);
+        outMeshCount++;
+    }
+
+    return firstIndex;
+}
