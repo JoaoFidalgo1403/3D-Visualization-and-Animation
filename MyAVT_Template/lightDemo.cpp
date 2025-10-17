@@ -78,7 +78,7 @@ bool fontLoaded = false;
 // Drone model indices when loaded via Assimp
 int gDroneModelFirstMesh = -1;
 int gDroneModelMeshCount = 0;
-float gDroneModelScale = 0.2f; // scale factor for imported drone model
+float gDroneModelScale = 0.04f; // scale factor for imported drone model
 
 // --- Utility structures and functions ---
 
@@ -1898,7 +1898,7 @@ void buildScene()
 	renderer.myMeshes.push_back(amesh);
 
     // Finally, load drone OBJ so its meshes are appended after primitives
-    int first = renderer.loadModelWithAssimp("assets/drone.obj", gDroneModelMeshCount);
+    int first = renderer.loadModelWithAssimp("spider/spider.obj", gDroneModelMeshCount);
     if (first >= 0) {
         gDroneModelFirstMesh = first;
         printf("Loaded drone model: %d meshes starting at index %d\n", gDroneModelMeshCount, gDroneModelFirstMesh);
