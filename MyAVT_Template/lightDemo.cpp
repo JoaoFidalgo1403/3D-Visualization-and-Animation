@@ -78,6 +78,7 @@ bool fontLoaded = false;
 // Drone model indices when loaded via Assimp
 int gDroneModelFirstMesh = -1;
 int gDroneModelMeshCount = 0;
+float gDroneModelScale = 0.2f; // scale factor for imported drone model
 
 // --- Utility structures and functions ---
 
@@ -1109,7 +1110,7 @@ void drawDrone(dataMesh &data) {
         // Render imported drone model
         mu.pushMatrix(gmu::MODEL);
         // scale/offset to fit scene if needed
-        mu.scale(gmu::MODEL, 1.0f, 1.0f, 1.0f);
+        mu.scale(gmu::MODEL, gDroneModelScale, gDroneModelScale, gDroneModelScale);
         mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
         mu.computeNormalMatrix3x3();
         data.texMode = 0;
