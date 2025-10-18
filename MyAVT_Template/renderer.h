@@ -86,6 +86,9 @@ public:
 
   void setTexUnit(int tuId, int texObjId);
 
+  // Billboard rendering
+  void renderBillboard(float* worldPos, float* cameraPos, float width, float height, int textureId);
+
   // Load a model file (e.g., OBJ) using Assimp and append its meshes to myMeshes.
   // Returns the index of the first appended mesh or -1 on failure. Outputs count via outMeshCount.
   int loadModelWithAssimp(const std::string &filepath, int &outMeshCount);

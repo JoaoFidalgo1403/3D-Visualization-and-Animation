@@ -718,3 +718,89 @@ int Renderer::loadModelWithAssimp(const std::string &filepath, int &outMeshCount
 
     return firstIndex;
 }
+
+void Renderer::renderBillboard(float* worldPos, float* cameraPos, float width, float height, int textureId) {
+    // Calculate billboard vectors
+    float lookDir[3] = {cameraPos[0] - worldPos[0], cameraPos[1] - worldPos[1], cameraPos[2] - worldPos[2]};
+    float length = sqrtf(lookDir[0]*lookDir[0] + lookDir[1]*lookDir[1] + lookDir[2]*lookDir[2]);
+    if (length > 0.0f) {
+        lookDir[0] /= length; lookDir[1] /= length; lookDir[2] /= length;
+    }
+    
+    // Right vector (cross product of look direction and up vector)
+    float right[3] = {-lookDir[2], 0.0f, lookDir[0]};
+    length = sqrtf(right[0]*right[0] + right[1]*right[1] + right[2]*right[2]);
+    if (length > 0.0f) {
+        right[0] /= length; right[1] /= length; right[2] /= length;
+    }
+    
+    // Up vector (cross product of right and look direction)
+    float up[3] = {right[1]*lookDir[2] - right[2]*lookDir[1], 
+                   right[2]*lookDir[0] - right[0]*lookDir[2], 
+                   right[0]*lookDir[1] - right[1]*lookDir[0]};
+    
+    // Billboard quad vertices (centered at worldPos)
+    float halfWidth = width * 0.5f;
+    float halfHeight = height * 0.5f;
+    
+    float vertices[16] = {
+        // Bottom-left
+        worldPos[0] - right[0]*halfWidth - up[0]*halfHeight,
+        worldPos[1] - right[1]*halfWidth - up[1]*halfHeight,
+        worldPos[2] - right[2]*halfWidth - up[2]*halfHeight,
+        1.0f,
+        // Bottom-right
+        worldPos[0] + right[0]*halfWidth - up[0]*halfHeight,
+        worldPos[1] + right[1]*halfWidth - up[1]*halfHeight,
+        worldPos[2] + right[2]*halfWidth - up[2]*halfHeight,
+        1.0f,
+        // Top-right
+        worldPos[0] + right[0]*halfWidth + up[0]*halfHeight,
+        worldPos[1] + right[1]*halfWidth + up[1]*halfHeight,
+        worldPos[2] + right[2]*halfWidth + up[2]*halfHeight,
+        1.0f,
+        // Top-left
+        worldPos[0] - right[0]*halfWidth + up[0]*halfHeight,
+        worldPos[1] - right[1]*halfWidth + up[1]*halfHeight,
+        worldPos[2] - right[2]*halfWidth + up[2]*halfHeight,
+        1.0f
+    };
+    
+    float texCoords[8] = {0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f};
+    unsigned int indices[6] = {0, 1, 2, 2, 3, 0};
+    
+    // Create temporary VAO for this billboard
+    GLuint vao, vbo[2];
+    glGenVertexArrays(1, &vao);
+    glGenBuffers(2, vbo);
+    
+    glBindVertexArray(vao);
+    
+    // Vertex buffer
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices) + sizeof(texCoords), nullptr, GL_STATIC_DRAW);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
+    glBufferSubData(GL_ARRAY_BUFFER, sizeof(vertices), sizeof(texCoords), texCoords);
+    
+    glEnableVertexAttribArray(Shader::VERTEX_COORD_ATTRIB);
+    glVertexAttribPointer(Shader::VERTEX_COORD_ATTRIB, 4, GL_FLOAT, 0, 0, 0);
+    glEnableVertexAttribArray(Shader::TEXTURE_COORD_ATTRIB);
+    glVertexAttribPointer(Shader::TEXTURE_COORD_ATTRIB, 2, GL_FLOAT, 0, 0, (void*)sizeof(vertices));
+    
+    // Index buffer
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[1]);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+    
+    // Bind texture
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, TexObjArray.getTextureId(textureId));
+    glUniform1i(tex_loc[0], 0);
+    
+    // Render
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
+    
+    // Cleanup
+    glBindVertexArray(0);
+    glDeleteVertexArrays(1, &vao);
+    glDeleteBuffers(2, vbo);
+}
