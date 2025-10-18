@@ -175,15 +175,8 @@ void main() {
 
         vec3 result = vec3(0.0);
 
-        // debug early-out
-        if (is_Hud) {
-            // Unlit HUD color (no lighting, no fog)
-            colorOut = uHudColor;
-            return;
-        }
 
         // directional light
-        if (!night_mode) result += CalcDirLight(dirLight, n, viewDir);
         if (!night_mode && !is_Hud) result += CalcDirLight(dirLight, n, viewDir);
 
         // point lights (use either numPointLights or 7)
@@ -237,7 +230,7 @@ void main() {
 
         // Apply fog at the very end of main()
         vec3 fogColor = vec3(0.35, 0.18, 0.08); // #5a2e14
-        float fogDensity = (fog_mode) ? 0.01f : 0.0f;
+        float fogDensity = (fog_mode) ? 0.01f : 0.00;
         float dist = length(DataIn.eye);  // eye-space distance to camera
         float fogFactor = exp(-pow(fogDensity * dist, 2.0));
         fogFactor = clamp(fogFactor, 0.0, 1.0);

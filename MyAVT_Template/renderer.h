@@ -56,6 +56,15 @@ public:
 
   GLuint getProgram() const { return program; }
 
+  // Expose uniform locations so external renderers (like aiRecursive_render)
+  // can use the same locations the Renderer caches when its program is bound.
+  GLint getPvmLoc() const { return pvm_loc; }
+  GLint getVmLoc() const { return vm_loc; }
+  GLint getNormalLoc() const { return normal_loc; }
+  GLint getNormalMapLoc() const { return normalMap_loc; }
+  GLint getSpecularMapLoc() const { return specularMap_loc; }
+  GLint getDiffMapCountLoc() const { return diffMapCount_loc; }
+
   void setLightPos(float *lightPos);
 
   void setSpotParam(float *coneDir, float cutOff);

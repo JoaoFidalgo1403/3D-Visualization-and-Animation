@@ -41,11 +41,10 @@ void main() {
     DataOut.TBN    = mat3(T, B, N);   // columns: T, B, N (tangent space → eye space)
 
     // Eye/legacy light in eye space (no tangent conversion here)
-    vec3 eyeDir   = -vec3(posEye);
     vec3 lightDir = vec3(l_pos - posEye);
 
-    DataOut.eye       = normalize(eyeDir);
-    DataOut.lightDir  = normalize(lightDir);
+    DataOut.eye = -vec3(posEye);             // eye at origin in eye-space, NOT normalized to preserve distance
+    DataOut.lightDir = normalize(lightDir);   // light direction can be normalized
     DataOut.tex_coord = texCoord.st;
 
     gl_Position = m_pvm * position;
