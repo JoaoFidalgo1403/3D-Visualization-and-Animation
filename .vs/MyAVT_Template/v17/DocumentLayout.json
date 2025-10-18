@@ -3,12 +3,16 @@
   "WorkspaceRootPath": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\AVT_Project\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\AVT_Project\\MyAVT_Template\\renderer.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
-      "RelativeMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|solutionrelative:MyAVT_Template\\renderer.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\AVT_Project\\MyAVT_Template\\lightDemo.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
       "RelativeMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|solutionrelative:MyAVT_Template\\lightDemo.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\AVT_Project\\MyAVT_Template\\renderer.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|solutionrelative:MyAVT_Template\\renderer.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\AVT_Project\\MyAVT_Template\\renderer.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|solutionrelative:MyAVT_Template\\renderer.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{613BFCDA-AB72-44C5-B8E6-E3BADF1F403B}|MyAVT_Template\\MyAVT_Template.vcxproj|C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\AVT_Project\\MyAVT_Template\\meshFromAssimp.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
@@ -26,24 +30,36 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 0,
+          "SelectedChildIndex": 3,
           "Children": [
             {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 1,
+              "Title": "renderer.h",
+              "DocumentMoniker": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\AVT_Project\\MyAVT_Template\\renderer.h",
+              "RelativeDocumentMoniker": "MyAVT_Template\\renderer.h",
+              "ToolTip": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\AVT_Project\\MyAVT_Template\\renderer.h",
+              "RelativeToolTip": "MyAVT_Template\\renderer.h",
+              "ViewState": "AgIAABoAAAAAAAAAAAD2v3wAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
+              "WhenOpened": "2025-10-17T21:56:44.913Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
               "Title": "renderer.cpp",
               "DocumentMoniker": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\AVT_Project\\MyAVT_Template\\renderer.cpp",
               "RelativeDocumentMoniker": "MyAVT_Template\\renderer.cpp",
               "ToolTip": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\AVT_Project\\MyAVT_Template\\renderer.cpp",
               "RelativeToolTip": "MyAVT_Template\\renderer.cpp",
-              "ViewState": "AgIAABECAAAAAAAAAAAvwCQCAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAAPkBAAAAAAAAAAAvwA4CAABUAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-10-17T11:14:39.556Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-10-17T11:14:39.556Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 4,
               "Title": "VSShaderlib.h",
               "DocumentMoniker": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\AVT_Project\\MyAVT_Template\\vsShaderLib.h",
               "RelativeDocumentMoniker": "MyAVT_Template\\vsShaderLib.h",
@@ -51,12 +67,24 @@
               "RelativeToolTip": "MyAVT_Template\\vsShaderLib.h",
               "ViewState": "AgIAAEoAAAAAAAAAAAAswEYAAAASAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
-              "WhenOpened": "2025-10-17T00:08:08.228Z",
+              "WhenOpened": "2025-10-17T00:08:08.228Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "lightDemo.cpp",
+              "DocumentMoniker": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\AVT_Project\\MyAVT_Template\\lightDemo.cpp",
+              "RelativeDocumentMoniker": "MyAVT_Template\\lightDemo.cpp",
+              "ToolTip": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\AVT_Project\\MyAVT_Template\\lightDemo.cpp",
+              "RelativeToolTip": "MyAVT_Template\\lightDemo.cpp",
+              "ViewState": "AgIAAM4EAAAAAAAAAAAowOgEAAAgAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
+              "WhenOpened": "2025-10-03T16:12:14.085Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 3,
               "Title": "meshFromAssimp.cpp",
               "DocumentMoniker": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\AVT_Project\\MyAVT_Template\\meshFromAssimp.cpp",
               "RelativeDocumentMoniker": "MyAVT_Template\\meshFromAssimp.cpp",
@@ -64,21 +92,7 @@
               "RelativeToolTip": "MyAVT_Template\\meshFromAssimp.cpp",
               "ViewState": "AgIAAHAAAAAAAAAAAAAAAO8AAAAhAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-10-16T23:46:11.441Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 1,
-              "Title": "lightDemo.cpp",
-              "DocumentMoniker": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\AVT_Project\\MyAVT_Template\\lightDemo.cpp",
-              "RelativeDocumentMoniker": "MyAVT_Template\\lightDemo.cpp",
-              "ToolTip": "C:\\Users\\joaof\\Desktop\\AVT_Project\\MyAVT_Template\\AVT_Project\\MyAVT_Template\\lightDemo.cpp",
-              "RelativeToolTip": "MyAVT_Template\\lightDemo.cpp",
-              "ViewState": "AgIAABwAAAAAAAAAAAAvwCgAAAAYAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-10-03T16:12:14.085Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-10-16T23:46:11.441Z"
             }
           ]
         }

@@ -54,6 +54,8 @@ public:
 
   void renderText(const TextCommand &text);
 
+  GLuint getProgram() const { return program; }
+
   void setLightPos(float *lightPos);
 
   void setSpotParam(float *coneDir, float cutOff);
@@ -67,6 +69,8 @@ public:
   void setFogMode(bool fogMode);
 
   void setIsHud(bool isHud);
+
+  void setIsModel(bool isModel);
 
   static const int MAX_POINT_LIGHTS = 7;
   static const int MAX_SPOT_LIGHTS = 4;
@@ -86,12 +90,18 @@ public:
 
   void setTexUnit(int tuId, int texObjId);
 
+  void resetModelMapUniforms();
+
+  void rebindDefaultSceneTextures();
+
+
   // GLuint getTextureIdFromUnit(int tu) const; // returns GL texture id stored for TU
 
 
 
   //Vector with meshes
   std::vector<struct MyMesh> myMeshes;
+  std::vector<struct MyMesh> droneMeshes;
 
   /// Object of class Texture that manage an array of Texture Objects
   Texture TexObjArray;
@@ -106,8 +116,8 @@ private:
 
   GLint pvm_loc, vm_loc, normal_loc, lpos_loc, texMode_loc;
 
-  GLint useNormalMap_loc = -1;
-  GLint useSpecularMap_loc = -1;
+  GLint normalMap_loc = -1;
+  GLint specularMap_loc = -1;
   GLint diffMapCount_loc = -1;
 
   GLint tex_loc[MAX_TEXTURES];
@@ -144,11 +154,11 @@ private:
   GLint fontPvm_loc, textColor_loc;
   GLuint textVAO, textVBO[2];
 
-    struct Font {
-        float size;
-        GLuint textureId;    //font atlas texture object ID stored in TexObjArray
-        stbtt_fontinfo info;
-        stbtt_packedchar packedChars[96];
-        stbtt_aligned_quad alignedQuads[96];
-    } font{};
+  struct Font {
+      float size;
+      GLuint textureId;    //font atlas texture object ID stored in TexObjArray
+      stbtt_fontinfo info;
+      stbtt_packedchar packedChars[96];
+      stbtt_aligned_quad alignedQuads[96];
+  } font{};
 };

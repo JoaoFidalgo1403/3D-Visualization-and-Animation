@@ -63,14 +63,10 @@ const aiScene* droneScene;
 float droneImportedScale;
 
 // --- Drone Model Data ---
-GLuint *droneTextureIds = nullptr;       // texture array for the drone (filled by createMeshFromAssimp)
-int droneModelStartIndex = -1;           // index inside renderer.myMeshes where drone meshes start
-int droneModelMeshCount = 0;             // number of meshes appended for the drone
+GLuint* droneTextureIds;       // texture array for the drone (filled by createMeshFromAssimp)
 bool droneModelLoaded = false;
 
 char model_dir[50];  //initialized by the user input at the console
-
-VSShaderLib shader;
 
 bool normalMapKey = TRUE;
 
@@ -1096,120 +1092,116 @@ void mouseWheel(int wheel, int direction, int x, int y) {
 // Render stuff
 //
 
-void aiRecursive_render(const aiNode* nd, std::vector<struct MyMesh>& myMeshes, GLuint*& textureIds) {
-	unsigned int n = 0, t;
+// lightDemo.cpp
+// lightDemo.cpp
+// Render an Assimp node hierarchy using the currently bound mesh shader program.
+//
+// allMeshes   : renderer.myMeshes (global vector).
+// textureIds  : array created by LoadGLTexturesTUs(...) for THIS scene.
+// baseIndex   : starting index in allMeshes where THIS model's meshes begin (e.g., droneModelStartIndex).
+void aiRecursive_render(const aiNode* nd, vector<struct MyMesh>& myMeshes, GLuint*& textureIds)
+{
 	GLint loc;
+
+	// Get node transformation matrix
+	aiMatrix4x4 m = nd->mTransformation;
+	// OpenGL matrices are column major
+	m.Transpose();
+
+	// save model matrix and apply node transformation
+	pushMatrix(MODEL);
+
+	float aux[16];
+	memcpy(aux, &m, sizeof(float) * 16);
+	multMatrix(MODEL, aux);
 
 
 	// draw all meshes assigned to this node
-	for (; n < nd->mNumMeshes; ++n) {
-	// send material
-	loc = glGetUniformLocation(shader.getProgramIndex(), "mat.ambient");
-	glUniform4fv(loc, 1, myMeshes[nd->mMeshes[n]].mat.ambient);
-	loc = glGetUniformLocation(shader.getProgramIndex(), "mat.diffuse");
-	glUniform4fv(loc, 1, myMeshes[nd->mMeshes[n]].mat.diffuse);
-	loc = glGetUniformLocation(shader.getProgramIndex(), "mat.specular");
-	glUniform4fv(loc, 1, myMeshes[nd->mMeshes[n]].mat.specular);
-	loc = glGetUniformLocation(shader.getProgramIndex(), "mat.emissive");
-	glUniform4fv(loc, 1, myMeshes[nd->mMeshes[n]].mat.emissive);
-	loc = glGetUniformLocation(shader.getProgramIndex(), "mat.shininess");
-	glUniform1f(loc, myMeshes[nd->mMeshes[n]].mat.shininess);
-	loc = glGetUniformLocation(shader.getProgramIndex(), "mat.texCount");
-	glUniform1i(loc, myMeshes[nd->mMeshes[n]].mat.texCount);
+	for (unsigned int n = 0; n < nd->mNumMeshes; ++n) {
 
+		// send the material
+		loc = glGetUniformLocation(renderer.getProgram(), "mat.ambient");
+		glUniform4fv(loc, 1, myMeshes[nd->mMeshes[n]].mat.ambient);
+		loc = glGetUniformLocation(renderer.getProgram(), "mat.diffuse");
+		glUniform4fv(loc, 1, myMeshes[nd->mMeshes[n]].mat.diffuse);
+		loc = glGetUniformLocation(renderer.getProgram(), "mat.specular");
+		glUniform4fv(loc, 1, myMeshes[nd->mMeshes[n]].mat.specular);
+		loc = glGetUniformLocation(renderer.getProgram(), "mat.emissive");
+		glUniform4fv(loc, 1, myMeshes[nd->mMeshes[n]].mat.emissive);
+		loc = glGetUniformLocation(renderer.getProgram(), "mat.shininess");
+		glUniform1f(loc, myMeshes[nd->mMeshes[n]].mat.shininess);
+		loc = glGetUniformLocation(renderer.getProgram(), "mat.texCount");
+		glUniform1i(loc, myMeshes[nd->mMeshes[n]].mat.texCount);
 
-	// ------------------------------------------------------------------
-	// New: tell the shader how many diffuse maps were bound and whether
-	// spec/normal maps are present for this mesh.
-	// We fetch locations from the *currently bound* program to be safe.
-	GLint currentProgram = 0;
-	glGetIntegerv(GL_CURRENT_PROGRAM, &currentProgram);
-	GLint locUseNormalMap = glGetUniformLocation(currentProgram, "useNormalMap");
-	GLint locUseSpecularMap = glGetUniformLocation(currentProgram, "useSpecularMap");
-	GLint locDiffMapCount = glGetUniformLocation(currentProgram, "diffMapCount");
+		unsigned int  diffMapCount = 0;  //read 2 diffuse textures
+		
+		//devido ao fragment shader suporta 2 texturas difusas simultaneas, 1 especular e 1 normal map
 
+		glUniform1i(normalMap_loc, false);   //GLSL normalMap variable initialized to 0
+		glUniform1i(specularMap_loc, false);
+		glUniform1ui(diffMapCount_loc, 0);
 
-	if (locUseNormalMap >= 0) glUniform1i(locUseNormalMap, 0);
-	if (locUseSpecularMap >= 0) glUniform1i(locUseSpecularMap, 0);
-	if (locDiffMapCount >= 0) glUniform1i(locDiffMapCount, 0);
+		if(myMeshes[nd->mMeshes[n]].mat.texCount != 0)  
+			for (unsigned int i = 0; i < myMeshes[nd->mMeshes[n]].mat.texCount; ++i) {
 
-	unsigned int diffMapCount = 0; // we support up to 2
+				//Activate a TU with a Texture Object
+				GLuint TU = myMeshes[nd->mMeshes[n]].texUnits[i];
+				glActiveTexture(GL_TEXTURE0 + TU);
+				glBindTexture(GL_TEXTURE_2D, textureIds[TU]);
 
-
-	// Bind all textures this mesh carries (diffuse/spec/normal)
-	if (myMeshes[nd->mMeshes[n]].mat.texCount != 0) {
-		for (unsigned int i = 0; i < myMeshes[nd->mMeshes[n]].mat.texCount; ++i) {
-			GLuint TU = myMeshes[nd->mMeshes[n]].texUnits[i]; // Texture Unit index
-			glActiveTexture(GL_TEXTURE0 + TU);
-			glBindTexture(GL_TEXTURE_2D, textureIds[TU]);
-
-
-			switch (myMeshes[nd->mMeshes[n]].texTypes[i]) {
-			case DIFFUSE:
-				if (diffMapCount == 0) {
-					++diffMapCount;
-					loc = glGetUniformLocation(currentProgram, "texmap");
-					glUniform1i(loc, TU);
-					if (locDiffMapCount >= 0) glUniform1i(locDiffMapCount, (GLint)diffMapCount);
-				} else if (diffMapCount == 1) {
-					++diffMapCount;
-					loc = glGetUniformLocation(currentProgram, "texmap1");
-					glUniform1i(loc, TU);
-					if (locDiffMapCount >= 0) glUniform1i(locDiffMapCount, (GLint)diffMapCount);
-					} else {
-						// only 2 diffuse maps are supported
-						fprintf(stderr, "[warn] extra diffuse ignored on this mesh\n");
+				if (myMeshes[nd->mMeshes[n]].texTypes[i] == DIFFUSE) {
+					if (diffMapCount == 0) {
+						diffMapCount++;
+						loc = glGetUniformLocation(renderer.getProgram(), "texUnitDiff");
+						glUniform1i(loc, TU);
+						glUniform1ui(diffMapCount_loc, diffMapCount);
 					}
-					break;
+					else if (diffMapCount == 1) {
+						diffMapCount++;
+						loc = glGetUniformLocation(renderer.getProgram(), "texUnitDiff1");
+						glUniform1i(loc, TU);
+						glUniform1ui(diffMapCount_loc, diffMapCount);
+					}
+					else printf("Only supports a Material with a maximum of 2 diffuse textures\n");
+				}
+				else if (myMeshes[nd->mMeshes[n]].texTypes[i] == SPECULAR) {
+					loc = glGetUniformLocation(renderer.getProgram(), "texUnitSpec");
+					glUniform1i(loc, TU);
+					glUniform1i(specularMap_loc, true);
+				}
+				else if (myMeshes[nd->mMeshes[n]].texTypes[i] == NORMALS) { //Normal map
+					loc = glGetUniformLocation(renderer.getProgram(), "texUnitNormalMap");
+					if (normalMapKey)
+						glUniform1i(normalMap_loc, normalMapKey);
+					glUniform1i(loc, TU);
 
-			case SPECULAR:
-				// bind to dedicated sampler and flip the feature flag
-				loc = glGetUniformLocation(currentProgram, "texUnitSpec");
-				if (loc >= 0) glUniform1i(loc, TU);
-				if (locUseSpecularMap >= 0) glUniform1i(locUseSpecularMap, 1);
-				break;
-
-
-			case NORMALS:
-				// bind normal map and enable if global toggle allows it
-				loc = glGetUniformLocation(currentProgram, "texUnitNormal");
-				if (loc >= 0) glUniform1i(loc, TU);
-				if (locUseNormalMap >= 0) glUniform1i(locUseNormalMap, normalMapKey ? 1 : 0);
-				break;
-
-
-			default:
-				fprintf(stderr, "[warn] unsupported texture type on this mesh\n");
-				break;
+				}
+				else printf("Texture Map not supported\n");
 			}
-		}
-	}
-	// ------------------------------------------------------------------
+		
+		// send matrices to OGL
+		computeDerivedMatrix(PROJ_VIEW_MODEL);
+		glUniformMatrix4fv(vm_uniformId, 1, GL_FALSE, mCompMatrix[VIEW_MODEL]);
+		glUniformMatrix4fv(pvm_uniformId, 1, GL_FALSE, mCompMatrix[PROJ_VIEW_MODEL]);
+		computeNormalMatrix3x3();
+		glUniformMatrix3fv(normal_uniformId, 1, GL_FALSE, mNormal3x3);
 
+		// bind VAO
+		glBindVertexArray(myMeshes[nd->mMeshes[n]].vao);
 
-	// send matrices to OGL (you already keep these updated elsewhere)
-	computeDerivedMatrix(PROJ_VIEW_MODEL);
-	glUniformMatrix4fv(vm_uniformId, 1, GL_FALSE, mCompMatrix[VIEW_MODEL]);
-	glUniformMatrix4fv(pvm_uniformId, 1, GL_FALSE, mCompMatrix[PROJ_VIEW_MODEL]);
-	computeNormalMatrix3x3();
-	glUniformMatrix3fv(normal_uniformId, 1, GL_FALSE, mNormal3x3);
-
-
-	// bind VAO & draw
-	glBindVertexArray(myMeshes[nd->mMeshes[n]].vao);
-	if (!shader.isProgramValid()) {
-		printf("Program Not Valid!\n");
-		exit(1);
-	}
-
-	glDrawElements(myMeshes[nd->mMeshes[n]].type, myMeshes[nd->mMeshes[n]].numIndexes, GL_UNSIGNED_INT, 0);
-	glBindVertexArray(0);
+		// draw
+		glDrawElements(myMeshes[nd->mMeshes[n]].type, myMeshes[nd->mMeshes[n]].numIndexes, GL_UNSIGNED_INT, 0);
+		glBindVertexArray(0);
 	}
 
 	// draw all children
-	for (t = 0; t < nd->mNumChildren; ++t)
-		aiRecursive_render(nd->mChildren[t], myMeshes, textureIds);
+	for (unsigned int n = 0; n < nd->mNumChildren; ++n) {
+		aiRecursive_render(nd->mChildren[n], myMeshes, textureIds);
+	}
+	popMatrix(MODEL);
 }
+
+
 
 void drawPackage(dataMesh &data) {
     if (!currentPackage.active) return;
@@ -1235,6 +1227,7 @@ void drawPackage(dataMesh &data) {
     data.vm = mu.get(gmu::VIEW_MODEL);
     data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
     data.normal = mu.getNormalMatrix();
+	renderer.setIsModel(false);
     renderer.renderMesh(data);
 
     mu.popMatrix(gmu::MODEL);
@@ -1254,28 +1247,25 @@ void drawBirds(dataMesh& data) {
         data.vm = mu.get(gmu::VIEW_MODEL),
         data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
         data.normal = mu.getNormalMatrix();
+		renderer.setIsModel(false);
         renderer.renderMesh(data);
         mu.popMatrix(gmu::MODEL);
     }
 }
 
+
 void drawDrone(dataMesh &data) {
 
-	if (droneModelLoaded && droneModelStartIndex >= 0 && droneModelMeshCount > 0) {
-		renderer.activateRenderMeshesShaderProg();
-        mu.pushMatrix(gmu::MODEL);
-
-        // world transform from your drone state
-        mu.translate(gmu::MODEL, drone.pos[0], drone.pos[1], drone.pos[2]);
-        mu.rotate(gmu::MODEL, drone.yaw,   0, 1, 0);
-        mu.rotate(gmu::MODEL, drone.pitch, 0, 0, 1);
-        mu.rotate(gmu::MODEL, drone.roll,  1, 0, 0);
-
-        float tweak = 1.0f;
-        mu.scale(gmu::MODEL, droneImportedScale * tweak, droneImportedScale * tweak, droneImportedScale * tweak);
-		aiRecursive_render(droneScene->mRootNode, renderer.myMeshes, droneTextureIds);
-        mu.popMatrix(gmu::MODEL);
-        return;
+	if (renderer.droneMeshes.size() > 0 && droneScene != nullptr) {
+		pushMatrix(MODEL);
+		translate(MODEL, 5.0, 5.0, 5.0);
+		float augment = 10.0f;
+		scale(MODEL, augment * droneImportedScale, augment * droneImportedScale, augment * droneImportedScale);
+		translate(MODEL, 0.5, 1.0, 0.0);
+		aiRecursive_render(droneScene->mRootNode, renderer.droneMeshes, droneTextureIds);
+		popMatrix(MODEL);
+		// swap buffers
+		return;
     }
 
     mu.pushMatrix(gmu::MODEL);
@@ -1307,6 +1297,7 @@ void drawDrone(dataMesh &data) {
 		data.vm = mu.get(gmu::VIEW_MODEL),
 		data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
 		data.normal = mu.getNormalMatrix();
+		renderer.setIsModel(false);
 		renderer.renderMesh(data);
 
 		mu.popMatrix(gmu::MODEL);
@@ -1500,10 +1491,10 @@ void renderSim(void) {
 
 	// prepare 3-component arrays for the renderer API
 	float dirEye3[3] = { dAux[0], dAux[1], dAux[2] };
-	float dirAmb[3]  = { 0.05f, 0.05f, 0.05f };
+	float dirAmb[3]  = { 0.2f, 0.2f, 0.2f };  // Increased ambient light
 	float sunIntensity = 2.0f; // 1.0 = same, 2.0 = twice as bright
-	float dirDiff[3] = { 0.40f * sunIntensity, 0.40f * sunIntensity, 0.40f * sunIntensity };
-	float dirSpec[3] = { 0.70f * sunIntensity, 0.70f * sunIntensity, 0.70f * sunIntensity };
+	float dirDiff[3] = { 0.6f * sunIntensity, 0.6f * sunIntensity, 0.6f * sunIntensity };  // Increased diffuse
+	float dirSpec[3] = { 0.8f * sunIntensity, 0.8f * sunIntensity, 0.8f * sunIntensity };  // Increased specular
 
 	// Query currently bound program (safe even if renderer hides program id)
 	GLint prog = 0;
@@ -1645,6 +1636,7 @@ void renderSim(void) {
 
 	}
 
+	renderer.setIsModel(false);
 	renderer.renderMesh(data);
 	mu.popMatrix(gmu::MODEL);
 
@@ -1686,7 +1678,8 @@ void renderSim(void) {
 				float col[4] = {1.0f, 0.2f, 0.2f, 1.0f}; // red = destination
 				memcpy(renderer.myMeshes[0].mat.diffuse, col, sizeof(col));
 			}
-
+			
+			renderer.setIsModel(false);
 			renderer.renderMesh(data);
 
 			// restore original diffuse so other objects not affected
@@ -1725,8 +1718,8 @@ void renderSim(void) {
 			drone.velocity[2] = 0.0f;
 		} else drone.pos[1] += DRONE_FALL_VELOCITY * dt;
 	} 
-
-	drawDrone(data);
+	
+	//drawDrone(data);
 
 	renderer.activateRenderMeshesShaderProg(); // ensure shader bound
 
@@ -1793,6 +1786,7 @@ void renderSim(void) {
 	}
 
 	// actually draw it
+	renderer.setIsModel(false);
 	renderer.renderMesh(data);
 	mu.popMatrix(gmu::MODEL);
 
@@ -1898,6 +1892,7 @@ void renderSim(void) {
 		data.vm  = mu.get(gmu::VIEW_MODEL);
 		data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
 		data.normal = mu.getNormalMatrix();
+		renderer.setIsModel(false);
 		renderer.renderMesh(data);
 		mu.popMatrix(gmu::MODEL);
 
@@ -1921,6 +1916,7 @@ void renderSim(void) {
 
 		data.vm  = mu.get(gmu::VIEW_MODEL);
 		data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+		renderer.setIsModel(false);
 		renderer.renderMesh(data);
 		mu.popMatrix(gmu::MODEL);
 
@@ -2068,23 +2064,19 @@ void buildScene()
     std::string droneObj = "spider/spider.obj"; 
 
     printf("[DRONE] Loading: %s\n", droneObj.c_str());
-    if (Import3DFromFile(droneObj.c_str(), droneImporter, droneScene, droneImportedScale)) {
-        // create meshes & textures for the drone model using the existing helper
-        std::vector<MyMesh> tmp = createMeshFromAssimp(droneScene, droneTextureIds);
 
-        // remember start index and append into renderer.myMeshes
-        droneModelStartIndex = (int)renderer.myMeshes.size();
-        for (auto &m : tmp) renderer.myMeshes.push_back(m);
-        droneModelMeshCount = (int)tmp.size();
-        droneModelLoaded = (droneModelMeshCount > 0);
+	if (!Import3DFromFile(droneObj.c_str(), droneImporter, droneScene, droneImportedScale)) 
+		return;
 
-        printf("[DRONE] imported %d meshes, start index %d, scale %.6f\n",
-                droneModelMeshCount, droneModelStartIndex, droneImportedScale);
-    } else {
-        printf("[DRONE] Import failed for %s\n", droneObj.c_str());
-    }
+	strcpy(model_dir, "spider/");
+	// create meshes & textures for the drone model using the existing helper
+	renderer.droneMeshes = createMeshFromAssimp(droneScene, droneTextureIds);
 
-	printf("\nNumber of Texture Objects is %d\n\n", renderer.TexObjArray.getNumTextureObjects());
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_CULL_FACE);
+	glEnable(GL_MULTISAMPLE);
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Back to black background
+
 
 	// set the camera position based on its spherical coordinates
 	camX = r * sin(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
@@ -2140,10 +2132,25 @@ int main(int argc, char **argv) {
 	glewExperimental = GL_TRUE;
 	glewInit();
 
-	// some GL settings
+	// Core OpenGL state setup
 	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LEQUAL);        // Ensure proper depth testing
+	glDepthMask(GL_TRUE);          // Enable depth writes by default
+	
+	// Face culling setup
 	glEnable(GL_CULL_FACE);
+	glCullFace(GL_BACK);          // Cull back faces
+	glFrontFace(GL_CCW);          // Counter-clockwise front faces
+	
+	// Blending setup for transparent objects
+	glDisable(GL_BLEND);          // Start with blending off
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glBlendEquation(GL_FUNC_ADD);
+	
+	// Multisampling for smoother edges
 	glEnable(GL_MULTISAMPLE);
+	
+	// Clear color - black background
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
 	printf ("Vendor: %s\n", glGetString (GL_VENDOR));

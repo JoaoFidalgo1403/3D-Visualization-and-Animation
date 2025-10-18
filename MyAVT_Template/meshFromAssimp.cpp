@@ -262,6 +262,9 @@ vector<struct MyMesh> createMeshFromAssimp(const aiScene*& sc, GLuint*& textureI
 			glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 3 * mesh->mNumVertices, mesh->mBitangents, GL_STATIC_DRAW);
 			glEnableVertexAttribArray(Shader::BITANGENT_ATTRIB);
 			glVertexAttribPointer(Shader::BITANGENT_ATTRIB, 3, GL_FLOAT, 0, 0, 0);
+		} else {
+			glDisableVertexAttribArray(Shader::TANGENT_ATTRIB);
+			glDisableVertexAttribArray(Shader::BITANGENT_ATTRIB);
 		}
 
 		// buffer for vertex texture coordinates

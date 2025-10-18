@@ -149,10 +149,28 @@ bool Renderer::setRenderMeshesShaderProg(const std::string& vertShaderPath, cons
 	glBindAttribLocation(program, Shader::BITANGENT_ATTRIB, "bitangent");
 
     glLinkProgram(program);
-
+ 
     printf("InfoLog for Model Shaders and Program\n%s\n\n", shader.getAllInfoLogs().c_str());
     if (!shader.isProgramValid())
         printf("GLSL Model Program Not Valid!\n");
+        
+    glUseProgram(program);
+    // fixed bindings
+    glUniform1i(glGetUniformLocation(program, "texmap"),       0);
+    glUniform1i(glGetUniformLocation(program, "texmap1"),      1);
+    glUniform1i(glGetUniformLocation(program, "texmap2"),      2);
+    glUniform1i(glGetUniformLocation(program, "texmap3"),      3);
+
+    glUniform1i(glGetUniformLocation(program, "texUnitDiff0"), 4);
+    glUniform1i(glGetUniformLocation(program, "texUnitDiff1"), 5);
+    glUniform1i(glGetUniformLocation(program, "texUnitNormal"),6);
+    glUniform1i(glGetUniformLocation(program, "texUnitSpec"),  7);
+
+    // defaults for model flags
+    GLint u;
+    u = glGetUniformLocation(program, "normalMap");    if (u >= 0) glUniform1i(u, false);
+    u = glGetUniformLocation(program, "specularMap");  if (u >= 0) glUniform1i(u, false);
+    u = glGetUniformLocation(program, "diffMapCount");    if (u >= 0) glUniform1i(u, 0);
 
     pvm_loc = glGetUniformLocation(program, "m_pvm");
     vm_loc = glGetUniformLocation(program, "m_viewModel");
@@ -167,8 +185,8 @@ bool Renderer::setRenderMeshesShaderProg(const std::string& vertShaderPath, cons
     tex_loc[4] = glGetUniformLocation(program, "texUnitSpec");    // optional spec map
     tex_loc[5] = glGetUniformLocation(program, "texUnitNormal");  // optional normal map
 
-    useNormalMap_loc   = glGetUniformLocation(program, "useNormalMap");    // bool/int
-    useSpecularMap_loc = glGetUniformLocation(program, "useSpecularMap");  // bool/int
+    normalMap_loc   = glGetUniformLocation(program, "normalMap");    // bool/int
+    specularMap_loc = glGetUniformLocation(program, "specularMap");  // bool/int
     diffMapCount_loc   = glGetUniformLocation(program, "diffMapCount");    // int
 
 
@@ -236,7 +254,7 @@ bool Renderer::setRenderMeshesShaderProg(const std::string& vertShaderPath, cons
         ss << "spotLights[" << i << "].quadratic";
         spot_quadratic_loc[i] = glGetUniformLocation(program, ss.str().c_str());
     }
-
+    
     return(shader.isProgramLinked() && shader.isProgramValid());
 }
 Renderer::~Renderer() {
@@ -339,6 +357,20 @@ void Renderer::setIsHud(bool isHud) {
 
     glUseProgram(prevProg); // restore previous
 }
+
+void Renderer::setIsModel(bool isModel) {
+    GLint prevProg = 0;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &prevProg);
+
+    // make sure this->program is the shader that contains is_Hud
+    glUseProgram(program); // program is your shader program handle
+    GLint loc = glGetUniformLocation(program, "uIsImportedModel");
+    if (loc != -1) glUniform1i(loc, isModel ? 1 : 0);
+
+    glUseProgram(prevProg); // restore previous
+}
+
+
 
 // helper
 static void safeNormalize3(float v[3]) {
@@ -540,6 +572,7 @@ void Renderer::renderText(const TextCommand& text) {
         }
     }
 }
+
 
 // GLuint Renderer::getTextureIdFromUnit(int tu) const {
     // return TexObjArray.getTextureId(tu);
