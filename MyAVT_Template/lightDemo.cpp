@@ -1219,6 +1219,71 @@ void updatePointLightsFromBuildings()
     }
 }
 
+//
+// Scene building with basic geometry
+//
+
+void setupMountainBillboards() {
+	gMountainPositions.clear();
+
+	// Place mountains around the city perimeter
+	const float cityRadius = 60.0f; // Distance from city center
+	const float mountainSpacing = 20.0f; // Distance between mountains
+	const int numMountains = 16; // Number of mountains around the perimeter
+
+	for (int i = 0; i < numMountains; ++i) {
+		float angle = (2.0f * PI * i) / numMountains;
+		float x = CITY_CENTER[0] + cityRadius * cosf(angle);
+		float z = CITY_CENTER[2] + cityRadius * sinf(angle);
+
+		// Add some randomness to make it look more natural
+		float randomOffset = 5.0f * (rand() / (float)RAND_MAX - 0.5f);
+		x += randomOffset;
+		z += randomOffset;
+
+		gMountainPositions.push_back(std::make_pair(x, z));
+	}
+
+	printf("Setup %d mountain billboards around city\n", (int)gMountainPositions.size());
+}
+
+void drawMountainBillboards() {
+	if (gMountainTextureId < 0) return;
+
+	// Get camera position based on current camera mode
+	float cameraPos[3];
+	switch (cameraMode) {
+	case THIRD: {
+		const float DEG2RAD = 3.14159265f / 180.0f;
+		float yawRad = drone.yaw * DEG2RAD;
+		float finalAngle = camOrbitAngle - (camOrbitFollowYaw ? yawRad : 0.0f);
+		float ox = camOrbitRadius * cosf(finalAngle);
+		float oz = camOrbitRadius * sinf(finalAngle);
+		cameraPos[0] = drone.pos[0] + ox;
+		cameraPos[1] = drone.pos[1] + camOrbitHeight;
+		cameraPos[2] = drone.pos[2] + oz;
+		break;
+	}
+	case FOLLOW:
+		cameraPos[0] = drone.pos[0] + camX;
+		cameraPos[1] = drone.pos[1] + camY;
+		cameraPos[2] = drone.pos[2] + camZ;
+		break;
+	case TOP_ORTHO:
+	case TOP_PERSPECTIVE:
+		cameraPos[0] = 35.0f;
+		cameraPos[1] = 50.0f;
+		cameraPos[2] = 35.0f;
+		break;
+	}
+
+	// Render each mountain billboard
+	for (const auto& pos : gMountainPositions) {
+		float worldPos[3] = { pos.first, 15.0f, pos.second }; // Height of 15 units
+		renderer.renderBillboard(worldPos, cameraPos, 30.0f, 40.0f, gMountainTextureId);
+	}
+}
+
 
 void renderSim(void) {
 	FrameCount++;
@@ -1789,71 +1854,6 @@ void renderSim(void) {
 }
 
 
-//
-// Scene building with basic geometry
-//
-
-void setupMountainBillboards() {
-    gMountainPositions.clear();
-    
-    // Place mountains around the city perimeter
-    const float cityRadius = 60.0f; // Distance from city center
-    const float mountainSpacing = 20.0f; // Distance between mountains
-    const int numMountains = 16; // Number of mountains around the perimeter
-    
-    for (int i = 0; i < numMountains; ++i) {
-        float angle = (2.0f * PI * i) / numMountains;
-        float x = CITY_CENTER[0] + cityRadius * cosf(angle);
-        float z = CITY_CENTER[2] + cityRadius * sinf(angle);
-        
-        // Add some randomness to make it look more natural
-        float randomOffset = 5.0f * (rand() / (float)RAND_MAX - 0.5f);
-        x += randomOffset;
-        z += randomOffset;
-        
-        gMountainPositions.push_back(std::make_pair(x, z));
-    }
-    
-    printf("Setup %d mountain billboards around city\n", (int)gMountainPositions.size());
-}
-
-void drawMountainBillboards() {
-    if (gMountainTextureId < 0) return;
-    
-    // Get camera position based on current camera mode
-    float cameraPos[3];
-    switch (cameraMode) {
-        case THIRD: {
-            const float DEG2RAD = 3.14159265f / 180.0f;
-            float yawRad = drone.yaw * DEG2RAD;
-            float finalAngle = camOrbitAngle - (camOrbitFollowYaw ? yawRad : 0.0f);
-            float ox = camOrbitRadius * cosf(finalAngle);
-            float oz = camOrbitRadius * sinf(finalAngle);
-            cameraPos[0] = drone.pos[0] + ox;
-            cameraPos[1] = drone.pos[1] + camOrbitHeight;
-            cameraPos[2] = drone.pos[2] + oz;
-            break;
-        }
-        case FOLLOW:
-            cameraPos[0] = drone.pos[0] + camX;
-            cameraPos[1] = drone.pos[1] + camY;
-            cameraPos[2] = drone.pos[2] + camZ;
-            break;
-        case TOP_ORTHO:
-        case TOP_PERSPECTIVE:
-            cameraPos[0] = 35.0f;
-            cameraPos[1] = 50.0f;
-            cameraPos[2] = 35.0f;
-            break;
-    }
-    
-    // Render each mountain billboard
-    for (const auto& pos : gMountainPositions) {
-        float worldPos[3] = {pos.first, 15.0f, pos.second}; // Height of 15 units
-        renderer.renderBillboard(worldPos, cameraPos, 30.0f, 40.0f, gMountainTextureId);
-    }
-}
-
 void buildScene()
 {
 	//Texture Object definition
@@ -1863,7 +1863,7 @@ void buildScene()
 	renderer.TexObjArray.texture2D_Loader("assets/drone.jpg");
 	
 	// Load mountain texture for billboards
-	renderer.TexObjArray.texture2D_Loader("assets/spider/drkwood2.jpg");
+	renderer.TexObjArray.texture2D_Loader("spider/drkwood2.jpg");
 	gMountainTextureId = renderer.TexObjArray.getNumTextureObjects() - 1;
 
 
