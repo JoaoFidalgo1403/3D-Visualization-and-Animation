@@ -1109,7 +1109,6 @@ void aiRecursive_render(const aiNode* nd,
 
     // --- Draw all meshes for this node ---
     for (unsigned int n = 0; n < nd->mNumMeshes; ++n) {
-        const MyMesh& mesh = myMeshes[nd->mMeshes[n]];
 
         // MATERIAL (use the currently bound mesh program)
         GLint prog = 0;
@@ -1117,65 +1116,65 @@ void aiRecursive_render(const aiNode* nd,
 
         GLint loc;
         loc = glGetUniformLocation(prog, "mat.ambient");
-        if (loc >= 0) glUniform4fv(loc, 1, mesh.mat.ambient);
+        if (loc >= 0) glUniform4fv(loc, 1, myMeshes[nd->mMeshes[n]].mat.ambient);
 
         loc = glGetUniformLocation(prog, "mat.diffuse");
-        if (loc >= 0) glUniform4fv(loc, 1, mesh.mat.diffuse);
+        if (loc >= 0) glUniform4fv(loc, 1, myMeshes[nd->mMeshes[n]].mat.diffuse);
 
         loc = glGetUniformLocation(prog, "mat.specular");
-        if (loc >= 0) glUniform4fv(loc, 1, mesh.mat.specular);
+        if (loc >= 0) glUniform4fv(loc, 1, myMeshes[nd->mMeshes[n]].mat.specular);
 
         loc = glGetUniformLocation(prog, "mat.emissive");
-        if (loc >= 0) glUniform4fv(loc, 1, mesh.mat.emissive);
+        if (loc >= 0) glUniform4fv(loc, 1, myMeshes[nd->mMeshes[n]].mat.emissive);
 
         loc = glGetUniformLocation(prog, "mat.shininess");
-        if (loc >= 0) glUniform1f(loc, mesh.mat.shininess);
+        if (loc >= 0) glUniform1f(loc, myMeshes[nd->mMeshes[n]].mat.shininess);
 
         loc = glGetUniformLocation(prog, "mat.texCount");
-        if (loc >= 0) glUniform1i(loc, mesh.mat.texCount);
+        if (loc >= 0) glUniform1i(loc, myMeshes[nd->mMeshes[n]].mat.texCount);
 
-        // Reset texture flags (use your existing uniform IDs)
-        glUniform1i(renderer.getNormalMapLoc(), GL_FALSE);
-        glUniform1i(renderer.getSpecularMapLoc(), GL_FALSE);
-        glUniform1ui(renderer.getDiffMapCountLoc(), 0);
 
-        // Bind and assign textures exactly like before
-        unsigned int diffMapCount = 0;
+		unsigned int diffMapCount = 0;
 
-        if (mesh.mat.texCount != 0) {
-            for (unsigned int i = 0; i < mesh.mat.texCount; ++i) {
-                GLuint TU = mesh.texUnits[i];
-                glActiveTexture(GL_TEXTURE0 + TU);
-                glBindTexture(GL_TEXTURE_2D, textureIds[TU]);
+		// Reset material flags for each mesh
+		glUniform1i(renderer.getNormalMapLoc(), false);
+		glUniform1i(renderer.getSpecularMapLoc(), false);
+		glUniform1ui(renderer.getDiffMapCountLoc(), 0);
 
-                if (mesh.texTypes[i] == DIFFUSE) {
-                    if (diffMapCount == 0) {
-                        loc = glGetUniformLocation(prog, "texUnitDiff");
-                        if (loc >= 0) glUniform1i(loc, (GLint)TU);
-                        glUniform1ui(renderer.getDiffMapCountLoc(), ++diffMapCount);
-                    } else if (diffMapCount == 1) {
-                        loc = glGetUniformLocation(prog, "texUnitDiff1");
-                        if (loc >= 0) glUniform1i(loc, (GLint)TU);
-                        glUniform1ui(renderer.getDiffMapCountLoc(), ++diffMapCount);
-                    } else {
-                        printf("Only supports a Material with a maximum of 2 diffuse textures\n");
-                    }
-                }
-                else if (mesh.texTypes[i] == SPECULAR) {
-                    loc = glGetUniformLocation(prog, "texUnitSpec");
-                    if (loc >= 0) glUniform1i(loc, (GLint)TU);
-                    glUniform1i(renderer.getSpecularMapLoc(), GL_TRUE);
-                }
-                else if (mesh.texTypes[i] == NORMALS) {
-                    loc = glGetUniformLocation(prog, "texUnitNormalMap");
-                    if (loc >= 0) glUniform1i(loc, (GLint)TU);
-                    glUniform1i(renderer.getNormalMapLoc(), GL_TRUE);
-                }
-                else {
-                    printf("Texture Map not supported\n");
-                }
-            }
-        }
+		unsigned int meshIdx = nd->mMeshes[n];
+
+		// Only loop if the material claims textures
+		if (myMeshes[meshIdx].mat.texCount != 0) {
+			for (unsigned int i = 0; i < myMeshes[meshIdx].mat.texCount; ++i) {
+				
+				//Activate a TU with a Texture Object
+				GLuint texId = myMeshes[meshIdx].texUnits[i];  // actual GL texture ID
+
+				// Bind according to type; diffuse supports up to 2 maps
+				if (myMeshes[meshIdx].texTypes[i] == DIFFUSE) {
+					if (diffMapCount == 0) {
+						diffMapCount++;
+						renderer.setTexUnit(4, texId);  // first diffuse on unit 4
+					} else if (diffMapCount == 1) {
+						diffMapCount++;
+						renderer.setTexUnit(5, texId);  // second diffuse on unit 5
+					} else {
+						printf("Only supports a Material with a maximum of 2 diffuse textures\n");
+					}
+				} else if (myMeshes[meshIdx].texTypes[i] == SPECULAR) {
+					renderer.setTexUnit(6, texId);      // specular map on unit 6
+					glUniform1i(renderer.getSpecularMapLoc(), GL_TRUE);
+				} else if (myMeshes[meshIdx].texTypes[i] == NORMALS) {
+					renderer.setTexUnit(7, texId);      // normal map on unit 7
+					glUniform1i(renderer.getNormalMapLoc(), GL_TRUE);
+				} else {
+					printf("Texture Map not supported\n");
+				}
+			}
+			// After the loop, tell the fragment shader how many diffuse maps are bound
+			glUniform1ui(renderer.getDiffMapCountLoc(), diffMapCount);
+		}
+
 
         // --- MATRICES from mu (this fixes the “spawns at package” bug) ---
         mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
@@ -1186,8 +1185,8 @@ void aiRecursive_render(const aiNode* nd,
         glUniformMatrix3fv(renderer.getNormalLoc(), 1, GL_FALSE, mu.getNormalMatrix());
 
         // --- Draw ---
-        glBindVertexArray(mesh.vao);
-        glDrawElements(mesh.type, mesh.numIndexes, GL_UNSIGNED_INT, 0);
+        glBindVertexArray(myMeshes[nd->mMeshes[n]].vao);
+        glDrawElements(myMeshes[nd->mMeshes[n]].type, myMeshes[nd->mMeshes[n]].numIndexes, GL_UNSIGNED_INT, 0);
         glBindVertexArray(0);
     }
 
@@ -1265,14 +1264,16 @@ void drawDrone(dataMesh &data) {
         mu.rotate(gmu::MODEL, drone.pitch, 0, 0, 1);
         mu.rotate(gmu::MODEL, drone.roll,  1, 0, 0);
 
-        float augment = 10.f;
+        float augment = 1.0f;
         mu.scale(gmu::MODEL,
                  augment * droneImportedScale,
                  augment * droneImportedScale,
                  augment * droneImportedScale);
 
         // render Assimp model relative to current MODEL
+		renderer.setIsModel(true);
         aiRecursive_render(droneScene->mRootNode, renderer.droneMeshes, droneTextureIds);
+		renderer.setIsModel(false);
 
         mu.popMatrix(gmu::MODEL);   // balance the first push
         return;
@@ -2082,6 +2083,7 @@ void buildScene()
 	strcpy(model_dir, "spider/");
 	// create meshes & textures for the drone model using the existing helper
 	renderer.droneMeshes = createMeshFromAssimp(droneScene, droneTextureIds);
+	if (!droneTextureIds) { printf("Drone textures not loaded\n"); }
 
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);

@@ -99,6 +99,8 @@ public:
 
   void setTexUnit(int tuId, int texObjId);
 
+  void setTexUnit(int tuId, GLuint texId);
+
   void resetModelMapUniforms();
 
   void rebindDefaultSceneTextures();
@@ -114,6 +116,7 @@ public:
 
   /// Object of class Texture that manage an array of Texture Objects
   Texture TexObjArray;
+  Texture TexObjArrayDrone;
 
 private:
 

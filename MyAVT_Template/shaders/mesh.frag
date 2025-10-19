@@ -161,6 +161,9 @@ vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir) {
     return ambient + diffuse + specular;
 }
 
+vec4 diff;
+vec4 auxSpec;
+
 void main() {
     // ---------------- HUD passthrough ----------------
     if (is_Hud) {
@@ -168,7 +171,7 @@ void main() {
         return;
     }
 
-    if (true) {
+    if (!uIsImportedModel) {
         vec3 n = normalize(DataIn.normal);
         vec3 viewDir = normalize(DataIn.eye); // eye-space view vector (from frag toward eye at origin)
         vec3 fragPos = DataIn.fragPos;
@@ -230,7 +233,7 @@ void main() {
 
         // Apply fog at the very end of main()
         vec3 fogColor = vec3(0.35, 0.18, 0.08); // #5a2e14
-        float fogDensity = (fog_mode) ? 0.01f : 0.00;
+        float fogDensity = (fog_mode) ? 0.02f : 0.00f;
         float dist = length(DataIn.eye);  // eye-space distance to camera
         float fogFactor = exp(-pow(fogDensity * dist, 2.0));
         fogFactor = clamp(fogFactor, 0.0, 1.0);
@@ -240,7 +243,9 @@ void main() {
         return;
     } else {
         // ===== Imported model path (fixed names/types) =====
+        vec4 spec = vec4(0.0);
         vec3 n;
+
         if (normalMap) {
             // Normal from normal map (tangent space)
             n = normalize(2.0 * texture(texUnitNormal, DataIn.tex_coord).rgb - 1.0);
@@ -254,25 +259,19 @@ void main() {
 
         float intensity = max(dot(n, l), 0.0);
 
-        vec4 diff;
-        vec4 auxSpec;
-
         if (mat.texCount == 0) {
             diff    = mat.diffuse;
             auxSpec = mat.specular;
-        } else {
+        } 
+        else {
             // Diffuse maps
             if (diffMapCount == 0) {
                 diff = mat.diffuse;
             } else if (diffMapCount == 1) {
                 diff = mat.diffuse * texture(texUnitDiff0, DataIn.tex_coord);
-            } else {
-                diff = mat.diffuse
-                       * texture(texUnitDiff0, DataIn.tex_coord)
-                       * texture(texUnitDiff1, DataIn.tex_coord);
-            }
-
-            // Specular map (optional)
+            } else
+                diff = mat.diffuse * texture(texUnitDiff0, DataIn.tex_coord) * texture(texUnitDiff1, DataIn.tex_coord);
+        
             if (specularMap) {
                 auxSpec = mat.specular * texture(texUnitSpec, DataIn.tex_coord);
             } else {
@@ -280,7 +279,6 @@ void main() {
             }
         }
 
-        vec4 spec = vec4(0.0);
         if (intensity > 0.0) {
             vec3 h      = normalize(l + e);
             float sdot  = max(dot(h, n), 0.0);
@@ -288,19 +286,15 @@ void main() {
             spec        = auxSpec * sPow;
         }
 
-        vec3 base = max(intensity * diff.rgb, diff.rgb * 0.15);
-        vec4 col  = vec4(base + spec.rgb, 1.0);
+        colorOut  =  vec4((max(intensity * diff, diff*0.15) + spec).rgb, 1.0);
 
         // Optional: apply same fog to imported path for consistency
-        if (fog_mode) {
-            float dist      = length(DataIn.eye);
-            float fogFactor = exp(-pow(fogDensity * dist, 2.0));
-            fogFactor       = clamp(fogFactor, 0.0, 1.0);
-            col.rgb         = mix(fogColor, col.rgb, fogFactor);
-        }
-
-        colorOut = col;
-        return;
+        //if (fog_mode) {
+        //   float dist      = length(DataIn.eye);
+        //    float fogFactor = exp(-pow(fogDensity * dist, 2.0));
+        //    fogFactor       = clamp(fogFactor, 0.0, 1.0);
+        //    col.rgb         = mix(fogColor, col.rgb, fogFactor);
+        //}
     }
 }
 

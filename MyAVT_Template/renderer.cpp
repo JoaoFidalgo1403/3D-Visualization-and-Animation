@@ -160,11 +160,12 @@ bool Renderer::setRenderMeshesShaderProg(const std::string& vertShaderPath, cons
     glUniform1i(glGetUniformLocation(program, "texmap1"),      1);
     glUniform1i(glGetUniformLocation(program, "texmap2"),      2);
     glUniform1i(glGetUniformLocation(program, "texmap3"),      3);
-
     glUniform1i(glGetUniformLocation(program, "texUnitDiff0"), 4);
     glUniform1i(glGetUniformLocation(program, "texUnitDiff1"), 5);
-    glUniform1i(glGetUniformLocation(program, "texUnitNormal"),6);
-    glUniform1i(glGetUniformLocation(program, "texUnitSpec"),  7);
+    glUniform1i(glGetUniformLocation(program, "texUnitSpec"),  6);
+    glUniform1i(glGetUniformLocation(program, "texUnitNormal"),7);
+
+
 
     // defaults for model flags
     GLint u;
@@ -182,8 +183,10 @@ bool Renderer::setRenderMeshesShaderProg(const std::string& vertShaderPath, cons
     tex_loc[1] = glGetUniformLocation(program, "texmap1");
     tex_loc[2] = glGetUniformLocation(program, "texmap2");
     tex_loc[3] = glGetUniformLocation(program, "texmap3");
-    tex_loc[4] = glGetUniformLocation(program, "texUnitSpec");    // optional spec map
-    tex_loc[5] = glGetUniformLocation(program, "texUnitNormal");  // optional normal map
+    tex_loc[4] = glGetUniformLocation(program, "texUnitDiff0");  // diffuse map 0
+    tex_loc[5] = glGetUniformLocation(program, "texUnitDiff1");
+    tex_loc[6] = glGetUniformLocation(program, "texUnitSpec");    // optional spec map
+    tex_loc[7] = glGetUniformLocation(program, "texUnitNormal");  // optional normal map
 
     normalMap_loc   = glGetUniformLocation(program, "normalMap");    // bool/int
     specularMap_loc = glGetUniformLocation(program, "specularMap");  // bool/int
@@ -493,6 +496,12 @@ void Renderer::cacheLightUniformLocations() {
 void Renderer::setTexUnit(int tuId, int texObjId) {
     glActiveTexture(GL_TEXTURE0 + tuId);
     glBindTexture(GL_TEXTURE_2D, TexObjArray.getTextureId(texObjId));
+    glUniform1i(tex_loc[tuId], tuId);
+}
+
+void Renderer::setTexUnit(int tuId, GLuint texId) {
+    glActiveTexture(GL_TEXTURE0 + tuId);
+    glBindTexture(GL_TEXTURE_2D, texId);
     glUniform1i(tex_loc[tuId], tuId);
 }
 
