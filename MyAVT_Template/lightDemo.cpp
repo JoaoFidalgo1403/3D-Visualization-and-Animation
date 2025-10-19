@@ -27,6 +27,7 @@
 #include "mathUtility.h"
 #include "model.h"
 #include "texture.h"
+#include "l3dBillboard.h"
 #include <algorithm>
 
 #include <vector>
@@ -45,6 +46,9 @@
 #include "meshFromAssimp.h"
 
 using namespace std;
+
+#define frand()			((float)rand()/RAND_MAX)
+#define M_PI			3.14159265
 
 #define CAPTION "AVT - Lab Assignment 1"
 int WindowHandle = 0;
@@ -98,6 +102,26 @@ const float DRONE_FALL_VELOCITY = -6.0f;          // m/s downward when battery d
 const float COLLISION_INVULN_DURATION = 2.0f; // seconds of invulnerability after taking collision damage
 const float DRONE_BLINK_PERIOD = 0.12f;      // visual blink period while invulnerable
 
+// --- Billboard parameters ---
+const float BILLBOARD_SCALE = 0.2f;
+
+// --- Particle parameters ---
+const int MAX_PARTICLES = 1500;
+
+typedef struct {
+	float	life;		// vida
+	float	fade;		// fade
+	float	r, g, b;    // color
+	GLfloat x, y, z;    // posi‹o
+	GLfloat vx, vy, vz; // velocidade 
+	GLfloat ax, ay, az; // acelera‹o
+} Particle;
+
+Particle particle[MAX_PARTICLES];
+int deadNumParticles = 0;
+
+bool fireworks = false;
+
 // runtime
 float collisionInvulnTimer = 0.0f; // counts down; >0 => invulnerable
 
@@ -138,11 +162,11 @@ enum CameraMode { FOLLOW, THIRD, TOP_ORTHO, TOP_PERSPECTIVE };
 CameraMode cameraMode = THIRD;
 
 // Third-person/orbit camera parameters (tweak to taste)
-float camOrbitRadius    = 7.5f;   // distance from drone
-float camOrbitHeight    = 3.0f;    // vertical offset above drone
+float camOrbitRadius    = 5.5f;   // distance from drone
+float camOrbitHeight    = 2.5f;    // vertical offset above drone
 float camOrbitSpeed     = 0.8f;    // radians per second (positive = orbit CCW)
 float camOrbitAngle     = 3.14159265f;    // current angle (radians)
-float camOrbitLookHeight = 1.5f;   // where camera looks relative to drone.y
+float camOrbitLookHeight = 1.7f;   // where camera looks relative to drone.y
 bool camOrbitFollowYaw = true; // camera rotates with drone yaw (child-like)
 
 // Orbit control
@@ -304,6 +328,65 @@ void changeSize(int w, int h) {
 	ratio = (1.0f * w) / h;
 	mu.loadIdentity(gmu::PROJECTION);
 	mu.perspective(53.13f, ratio, 0.1f, 1000.0f);
+}
+
+
+/// :::::::::::::::::::::::::::::::::::::::::::::::: PARTICLES :::::::::::::::::::::::::::::::::::::::::::::::::://///
+void updateParticles()
+{
+	int i;
+	float h;
+
+	/* Método de Euler de integração de eq. diferenciais ordinárias
+	h representa o step de tempo; dv/dt = a; dx/dt = v; e conhecem-se os valores iniciais de x e v */
+
+	//h = 0.125f;
+	h = 0.033;
+	if (fireworks) {
+
+		for (i = 0; i < MAX_PARTICLES; i++)
+		{
+			particle[i].x += (h*particle[i].vx);
+			particle[i].y += (h*particle[i].vy);
+			particle[i].z += (h*particle[i].vz);
+			particle[i].vx += (h*particle[i].ax);
+			particle[i].vy += (h*particle[i].ay);
+			particle[i].vz += (h*particle[i].az);
+			particle[i].life -= particle[i].fade;
+		}
+	}
+}
+
+
+void initParticles(void)
+{
+	GLfloat v, theta, phi;
+	int i;
+
+	for (i = 0; i<MAX_PARTICLES; i++)
+	{
+		v = 0.8*frand() + 0.2;
+		phi = frand()*M_PI;
+		theta = 2.0*frand()*M_PI;
+
+		particle[i].x = 0.0f;
+		particle[i].y = 10.0f;
+		particle[i].z = 0.0f;
+		particle[i].vx = v * cos(theta) * sin(phi);
+		particle[i].vy = v * cos(phi);
+		particle[i].vz = v * sin(theta) * sin(phi);
+		particle[i].ax = 0.1f; /* simular um pouco de vento */
+		particle[i].ay = -0.15f; /* simular a aceleração da gravidade */
+		particle[i].az = 0.0f;
+
+		/* tom amarelado que vai ser multiplicado pela textura que varia entre branco e preto */
+		particle[i].r = 0.882f;
+		particle[i].g = 0.552f;
+		particle[i].b = 0.211f;
+
+		particle[i].life = 1.0f;		/* vida inicial */
+		particle[i].fade = 0.0025f;	    /* step de decréscimo da vida para cada iteração */
+	}
 }
 
 // -----------------------------------------------------------
@@ -1381,6 +1464,9 @@ void updatePointLightsFromBuildings()
 void renderSim(void) {
 	FrameCount++;
 
+	float cameraPos[3], billBoardPos[3];
+	float particle_color[4];
+
 	static int lastFrameTime = glutGet(GLUT_ELAPSED_TIME);
 	int nowFrame = glutGet(GLUT_ELAPSED_TIME);
 	float frameDt = (nowFrame - lastFrameTime) * 0.001f; // seconds
@@ -1439,16 +1525,16 @@ void renderSim(void) {
 				float oz = camOrbitRadius * sinf(finalAngle);
 
 				// world-space camera position = drone position + offset
-				float camWorldX = drone.pos[0] + ox;
-				float camWorldY = drone.pos[1] + camOrbitHeight;
-				float camWorldZ = drone.pos[2] + oz;
+				cameraPos[0] = drone.pos[0] + ox;
+				cameraPos[1] = drone.pos[1] + camOrbitHeight;
+				cameraPos[2] = drone.pos[2] + oz;
 
 				// where to look: the drone's position (selfie style)
 				float lookX = drone.pos[0];
 				float lookY = drone.pos[1] + camOrbitLookHeight;
 				float lookZ = drone.pos[2];
 
-				mu.lookAt(camWorldX, camWorldY, camWorldZ,
+				mu.lookAt(cameraPos[0], cameraPos[1], cameraPos[2],
 						lookX, lookY, lookZ,
 						0, 1, 0);
 
@@ -1459,6 +1545,10 @@ void renderSim(void) {
 
 
 		case TOP_ORTHO:
+			cameraPos[0] = 35.0f;
+			cameraPos[1] = 50.0f;
+			cameraPos[2] = 35.0f;
+		
 			mu.lookAt(35, 50, 35, 
 					  35, 0,  35, 
 					  0, 0, -1);
@@ -1467,6 +1557,10 @@ void renderSim(void) {
 			break;
 		
 		case TOP_PERSPECTIVE:
+			cameraPos[0] = 35.0f;
+			cameraPos[1] = 50.0f;
+			cameraPos[2] = 35.0f;
+			
 			mu.lookAt(35, 150, 35, 
 					  35, 0,  35, 
 					  0, 0, -1);
@@ -1475,6 +1569,10 @@ void renderSim(void) {
 			break;
 
 		case FOLLOW:
+			cameraPos[0] = drone.pos[0] + camX;
+			cameraPos[1] = drone.pos[1] + camY;
+			cameraPos[2] = drone.pos[2] + camZ;
+		
 			mu.lookAt(drone.pos[0] + camX, drone.pos[1] + camY,  drone.pos[2] + camZ, 
 					  drone.pos[0] + 1.0f, drone.pos[1] + 0.25f, drone.pos[2] + 1.0f, 
 					  0, 1, 0);
@@ -1634,7 +1732,7 @@ void renderSim(void) {
 	dataMesh data;
 
 	data.meshID = 6; // For the terrain (last mesh)
-	data.texMode = 5; // "two-texture" path in mesh.frag
+	data.texMode = 7; // "two-texture" path in mesh.frag
 	data.vm = mu.get(gmu::VIEW_MODEL),
 	data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
 	data.normal = mu.getNormalMatrix();
@@ -1651,6 +1749,44 @@ void renderSim(void) {
 	renderer.setIsModel(false);
 	renderer.renderMesh(data);
 	mu.popMatrix(gmu::MODEL);
+
+
+	// Draw the Billboards
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	
+	renderer.setTexUnit(3, 4); // Billboard texture
+
+	data.meshID = 6; // Quad mesh for the billboards
+	for (int i=0; i<10; i++) {
+		for (int j=0; j<10; j++){
+			mu.pushMatrix(gmu::MODEL);
+
+			billBoardPos[0] = i*10.0f; billBoardPos[1] = 3.0f; billBoardPos[2] = j*10.0f;
+
+			mu.translate(gmu::MODEL, billBoardPos[0], billBoardPos[1], billBoardPos[2]);
+			mu.scale(gmu::MODEL, BILLBOARD_SCALE, BILLBOARD_SCALE, BILLBOARD_SCALE); // Billboard size
+
+			l3dBillboardCylindricalBegin(cameraPos, billBoardPos);
+
+			data.texMode = 5;   //modulate diffuse color with texel color
+			data.vm = mu.get(gmu::VIEW_MODEL);
+			data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+			data.normal = mu.getNormalMatrix();
+
+			mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+			mu.computeNormalMatrix3x3();
+
+			renderer.renderMesh(data);
+			mu.popMatrix(gmu::MODEL);
+		}
+	}
+
+	//glDisable(GL_BLEND);
+
+	renderer.setTexUnit(3, 3); // Reset to default texture unit
+
 
 	// Draw the Buildings
 	data.meshID = 0; // For the cube (myMeshes[0])
@@ -1961,7 +2097,9 @@ void buildScene()
 	renderer.TexObjArray.texture2D_Loader("assets/marstex.jpg");
 	renderer.TexObjArray.texture2D_Loader("assets/noise2.jpg");
 	renderer.TexObjArray.texture2D_Loader("assets/drone.jpg");
-
+	
+	renderer.TexObjArray.texture2D_Loader("assets/tree.tga");
+	renderer.TexObjArray.texture2D_Loader("assets/particle.tga");
 
 	//Scene geometry with triangle meshes
 
@@ -2074,14 +2212,14 @@ void buildScene()
 		cerr << "Fonts loaded\n";
 
 	// path to the folder containing drone.obj and its textures (relative to EXE)
-    std::string droneObj = "spider/spider.obj"; 
+    std::string droneObj = "drone/drone.obj"; 
 
     printf("[DRONE] Loading: %s\n", droneObj.c_str());
 
 	if (!Import3DFromFile(droneObj.c_str(), droneImporter, droneScene, droneImportedScale)) 
 		return;
 
-	strcpy(model_dir, "spider/");
+	strcpy(model_dir, "drone/");
 	// create meshes & textures for the drone model using the existing helper
 	renderer.droneMeshes = createMeshFromAssimp(droneScene, droneTextureIds);
 	if (!droneTextureIds) { printf("Drone textures not loaded\n"); }

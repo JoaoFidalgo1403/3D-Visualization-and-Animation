@@ -160,6 +160,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="basic_geometry.cpp" />
+    <ClCompile Include="l3dBillboard.cpp" />
     <ClCompile Include="lightDemo.cpp" />
     <ClCompile Include="mathUtility.cpp" />
     <ClCompile Include="renderer.cpp" />
@@ -178,6 +179,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="cube.h" />
+    <ClInclude Include="l3dBillboard.h" />
     <ClInclude Include="mathUtility.h" />
     <ClInclude Include="model.h" />
     <ClInclude Include="renderer.h" />

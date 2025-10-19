@@ -222,6 +222,17 @@ void main() {
             vec3 texel = texture(texmap3, DataIn.tex_coord).rgb;
             vec3 outc = clamp(result * texel + 0.07 * texel, 0.0, 1.0);
             colorOut = vec4(outc, uAlpha);
+        } else if (texMode == 5) { // Used for Billboards
+            vec4 texel = texture(texmap3, DataIn.tex_coord);
+            vec3 outc = clamp(result * texel.rgb + 0.07 * texel.rgb, 0.0, 1.0);
+            if(texel.a < 0.40)     discard;
+            else    colorOut = vec4(outc, texel.a);
+        } else if (texMode == 6) { // Used for Particles
+            vec4 texel = texture(texmap3, DataIn.tex_coord);
+            
+            if((texel.a < 0.40)  || (mat.diffuse.a == 0.0) ) discard;
+            else
+                colorOut = mat.diffuse * texel;
         } else {
             vec2 tiledTC1 = DataIn.tex_coord * terrainTile1;
             vec2 tiledTC2 = DataIn.tex_coord * terrainTile2;
