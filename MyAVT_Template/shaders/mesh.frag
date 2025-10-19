@@ -10,7 +10,7 @@ uniform sampler2D texmap2;
 uniform sampler2D texmap3;
 
 // ---------- Imported model-specific flags ----------
-uniform int  diffMapCount;       // 0 = none, 1 = texUnitDiff0, 2 = texUnitDiff0 * texUnitDiff1
+uniform uint  diffMapCount;       // 0 = none, 1 = texUnitDiff0, 2 = texUnitDiff0 * texUnitDiff1
 uniform bool normalMap;
 uniform bool specularMap;
 
@@ -18,7 +18,7 @@ uniform bool specularMap;
 uniform sampler2D texUnitDiff0;
 uniform sampler2D texUnitDiff1;
 uniform sampler2D texUnitSpec;
-uniform sampler2D texUnitNormal;
+uniform sampler2D texUnitNormalMap;
 
 // ---------- Fog ----------
 uniform vec3  fogColor;     // Color of the fog
@@ -248,7 +248,7 @@ void main() {
 
         if (normalMap) {
             // Normal from normal map (tangent space)
-            n = normalize(2.0 * texture(texUnitNormal, DataIn.tex_coord).rgb - 1.0);
+            n = normalize(2.0 * texture(texUnitNormalMap, DataIn.tex_coord).rgb - 1.0);
         } else {
             n = normalize(DataIn.normal);
         }

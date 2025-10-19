@@ -24,35 +24,39 @@ out Data {
 } DataOut;
 
 void main() {
-    vec3 n, t, b;
-	vec3 lightDir, eyeDir;
-	vec3 aux;
+    vec4 pos = m_viewModel * vec4(position, 1.0);
 
-	vec4 pos = m_viewModel * vec4(position, 1.0);
+    vec3 n = normalize(m_normal * normal);
+    vec3 eyeDir = vec3(-pos);
+    vec3 lightDir = vec3(l_pos - pos);
 
-	n = normalize(m_normal * normal.xyz);
-	eyeDir =  vec3(-pos);
-	lightDir = vec3(l_pos - pos);
+    if (normalMap) {
+        vec3 t = normalize(m_normal * tangent);
+        vec3 b = normalize(m_normal * bitangent);
+        vec3 aux;
+        aux.x = dot(lightDir, t);
+        aux.y = dot(lightDir, b);
+        aux.z = dot(lightDir, n);
+        lightDir = normalize(aux);
+        aux.x = dot(eyeDir, t);
+        aux.y = dot(eyeDir, b);
+        aux.z = dot(eyeDir, n);
+        eyeDir = normalize(aux);
+        DataOut.TBN = mat3(t, b, n);
+    } else {
+        lightDir = normalize(lightDir);
+        vec3 t = normalize(m_normal * tangent);
+        vec3 b = normalize(m_normal * bitangent);
+        DataOut.TBN = mat3(t, b, n);
+    }
 
-	if(normalMap)  {  //transform eye and light vectors by tangent basis
-		t = normalize(m_normal * tangent.xyz);
-		b = normalize(m_normal * bitangent.xyz);
+    DataOut.normal = n;
+    DataOut.lightDir = lightDir;
+    DataOut.eye = eyeDir;
 
-		aux.x = dot(lightDir, t);
-		aux.y = dot(lightDir, b);
-		aux.z = dot(lightDir, n);
-		lightDir = normalize(aux);
+    DataOut.tex_coord = texCoord;
 
-		aux.x = dot(eyeDir, t);
-		aux.y = dot(eyeDir, b);
-		aux.z = dot(eyeDir, n);
-		eyeDir = normalize(aux);
-	}
+    DataOut.fragPos = vec3(pos);
 
-	DataOut.normal = n;
-	DataOut.lightDir = lightDir;
-	DataOut.eye = eyeDir;
-	DataOut.tex_coord = vec2(texCoord);
-
-	gl_Position = m_pvm * vec4(position, 1.0);	
+    gl_Position = m_pvm * vec4(position, 1.0);
 }

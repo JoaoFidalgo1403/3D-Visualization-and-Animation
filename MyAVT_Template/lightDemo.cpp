@@ -1148,7 +1148,8 @@ void aiRecursive_render(const aiNode* nd,
 			for (unsigned int i = 0; i < myMeshes[meshIdx].mat.texCount; ++i) {
 				
 				//Activate a TU with a Texture Object
-				GLuint texId = myMeshes[meshIdx].texUnits[i];  // actual GL texture ID
+				unsigned localIdx = myMeshes[meshIdx].texUnits[i];
+				GLuint texId = textureIds[localIdx];  // actual GL texture ID
 
 				// Bind according to type; diffuse supports up to 2 maps
 				if (myMeshes[meshIdx].texTypes[i] == DIFFUSE) {
