@@ -54,6 +54,17 @@ public:
 
   void renderText(const TextCommand &text);
 
+  GLuint getProgram() const { return program; }
+
+  // Expose uniform locations so external renderers (like aiRecursive_render)
+  // can use the same locations the Renderer caches when its program is bound.
+  GLint getPvmLoc() const { return pvm_loc; }
+  GLint getVmLoc() const { return vm_loc; }
+  GLint getNormalLoc() const { return normal_loc; }
+  GLint getNormalMapLoc() const { return normalMap_loc; }
+  GLint getSpecularMapLoc() const { return specularMap_loc; }
+  GLint getDiffMapCountLoc() const { return diffMapCount_loc; }
+
   void setLightPos(float *lightPos);
 
   void setSpotParam(float *coneDir, float cutOff);
@@ -67,6 +78,8 @@ public:
   void setFogMode(bool fogMode);
 
   void setIsHud(bool isHud);
+
+  void setIsModel(bool isModel);
 
   static const int MAX_POINT_LIGHTS = 7;
   static const int MAX_SPOT_LIGHTS = 4;
@@ -86,13 +99,24 @@ public:
 
   void setTexUnit(int tuId, int texObjId);
 
+  void setTexUnit(int tuId, GLuint texId);
+
+  void resetModelMapUniforms();
+
+  void rebindDefaultSceneTextures();
+
+
+  // GLuint getTextureIdFromUnit(int tu) const; // returns GL texture id stored for TU
+
 
 
   //Vector with meshes
   std::vector<struct MyMesh> myMeshes;
+  std::vector<struct MyMesh> droneMeshes;
 
   /// Object of class Texture that manage an array of Texture Objects
   Texture TexObjArray;
+  Texture TexObjArrayDrone;
 
 private:
 
@@ -103,6 +127,11 @@ private:
   GLuint textProgram;
 
   GLint pvm_loc, vm_loc, normal_loc, lpos_loc, texMode_loc;
+
+  GLint normalMap_loc = -1;
+  GLint specularMap_loc = -1;
+  GLint diffMapCount_loc = -1;
+
   GLint tex_loc[MAX_TEXTURES];
   
   // Directional light uniform locations
@@ -129,7 +158,7 @@ private:
   GLint spot_linear_loc[MAX_SPOT_LIGHTS];
   GLint spot_quadratic_loc[MAX_SPOT_LIGHTS];
 
-  // global count uniform locations (optional)
+  // global count uniform locations
   GLint num_point_lights_loc = -1;
   GLint num_spot_lights_loc  = -1;
 
@@ -137,11 +166,11 @@ private:
   GLint fontPvm_loc, textColor_loc;
   GLuint textVAO, textVBO[2];
 
-    struct Font {
-        float size;
-        GLuint textureId;    //font atlas texture object ID stored in TexObjArray
-        stbtt_fontinfo info;
-        stbtt_packedchar packedChars[96];
-        stbtt_aligned_quad alignedQuads[96];
-    } font{};
+  struct Font {
+      float size;
+      GLuint textureId;    //font atlas texture object ID stored in TexObjArray
+      stbtt_fontinfo info;
+      stbtt_packedchar packedChars[96];
+      stbtt_aligned_quad alignedQuads[96];
+  } font{};
 };

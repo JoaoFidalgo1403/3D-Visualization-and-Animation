@@ -33,6 +33,17 @@
 #include <utility>  // for std::pair
 #include <ctime>    // for seeding rand()
 
+// assimp include files. These three are usually needed.
+#include "assimp/Importer.hpp"	//OO version Header!
+#include "assimp/scene.h"
+
+// Use Very Simple Libs
+#include "VSShaderlib.h"
+#include "AVTmathLib.h"
+
+#include "Texture_Loader.h"
+#include "meshFromAssimp.h"
+
 using namespace std;
 
 #define CAPTION "AVT - Lab Assignment 1"
@@ -41,6 +52,33 @@ int WinX = 1024, WinY = 768;
 
 unsigned int FrameCount = 0;
 bool isPaused = false;
+
+// --- To import models ---
+Assimp::Importer droneImporter;
+
+// the global Assimp scene object
+const aiScene* droneScene;
+
+// scale factor for the Assimp model to fit in the window
+float droneImportedScale;
+
+// --- Drone Model Data ---
+GLuint* droneTextureIds;       // texture array for the drone (filled by createMeshFromAssimp)
+bool droneModelLoaded = false;
+
+char model_dir[50];  //initialized by the user input at the console
+
+bool normalMapKey = TRUE;
+
+//External array storage defined in AVTmathLib.cpp
+
+/// The storage for matrices
+extern float mMatrix[COUNT_MATRICES][16];
+extern float mCompMatrix[COUNT_COMPUTED_MATRICES][16];
+
+/// The normal matrix
+extern float mNormal3x3[9];
+
 
 // --- Game state (battery/distance/score) ---
 float batteryLevel = 1.0f;                        // 1.0 == full battery
@@ -392,6 +430,7 @@ void checkPackagePickupAndDelivery() {
     }
 }
 
+
 // ------------------------------------------------------------
 //
 // Game State
@@ -611,7 +650,6 @@ void updateBirds(float dt) {
     }
 }
 
-
 // ------------------------------------------------------------
 //
 // Collision Detection
@@ -725,6 +763,7 @@ void handleCollisions() {
 //
 // Update Drone State
 //
+
 float wrapDegrees(float a) {
 		a = fmodf(a + 180.0f, 360.0f);
 		if (a < 0.0f) a += 360.0f;
@@ -1046,6 +1085,122 @@ void mouseWheel(int wheel, int direction, int x, int y) {
 // Render stuff
 //
 
+// lightDemo.cpp
+// lightDemo.cpp
+// Render an Assimp node hierarchy using the currently bound mesh shader program.
+//
+// allMeshes   : renderer.myMeshes (global vector).
+// textureIds  : array created by LoadGLTexturesTUs(...) for THIS scene.
+// baseIndex   : starting index in allMeshes where THIS model's meshes begin (e.g., droneModelStartIndex).
+void aiRecursive_render(const aiNode* nd,
+                        std::vector<struct MyMesh>& myMeshes,
+                        GLuint*& textureIds)
+{
+    // --- Node transform (Assimp) -> mu MODEL stack ---
+    aiMatrix4x4 m = nd->mTransformation;
+    m.Transpose();
+
+    mu.pushMatrix(gmu::MODEL);
+
+    float aux[16];
+    memcpy(aux, &m, sizeof(float) * 16);
+
+    mu.multMatrix(gmu::MODEL, aux);
+
+    // --- Draw all meshes for this node ---
+    for (unsigned int n = 0; n < nd->mNumMeshes; ++n) {
+
+        // MATERIAL (use the currently bound mesh program)
+        GLint prog = 0;
+        glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
+
+        GLint loc;
+        loc = glGetUniformLocation(prog, "mat.ambient");
+        if (loc >= 0) glUniform4fv(loc, 1, myMeshes[nd->mMeshes[n]].mat.ambient);
+
+        loc = glGetUniformLocation(prog, "mat.diffuse");
+        if (loc >= 0) glUniform4fv(loc, 1, myMeshes[nd->mMeshes[n]].mat.diffuse);
+
+        loc = glGetUniformLocation(prog, "mat.specular");
+        if (loc >= 0) glUniform4fv(loc, 1, myMeshes[nd->mMeshes[n]].mat.specular);
+
+        loc = glGetUniformLocation(prog, "mat.emissive");
+        if (loc >= 0) glUniform4fv(loc, 1, myMeshes[nd->mMeshes[n]].mat.emissive);
+
+        loc = glGetUniformLocation(prog, "mat.shininess");
+        if (loc >= 0) glUniform1f(loc, myMeshes[nd->mMeshes[n]].mat.shininess);
+
+        loc = glGetUniformLocation(prog, "mat.texCount");
+        if (loc >= 0) glUniform1i(loc, myMeshes[nd->mMeshes[n]].mat.texCount);
+
+
+		unsigned int diffMapCount = 0;
+
+		// Reset material flags for each mesh
+		glUniform1i(renderer.getNormalMapLoc(), false);
+		glUniform1i(renderer.getSpecularMapLoc(), false);
+		glUniform1ui(renderer.getDiffMapCountLoc(), 0);
+
+		unsigned int meshIdx = nd->mMeshes[n];
+
+		// Only loop if the material claims textures
+		if (myMeshes[meshIdx].mat.texCount != 0) {
+			for (unsigned int i = 0; i < myMeshes[meshIdx].mat.texCount; ++i) {
+				
+				//Activate a TU with a Texture Object
+				GLuint texId = myMeshes[meshIdx].texUnits[i];  // actual GL texture ID
+
+				// Bind according to type; diffuse supports up to 2 maps
+				if (myMeshes[meshIdx].texTypes[i] == DIFFUSE) {
+					if (diffMapCount == 0) {
+						diffMapCount++;
+						renderer.setTexUnit(4, texId);  // first diffuse on unit 4
+					} else if (diffMapCount == 1) {
+						diffMapCount++;
+						renderer.setTexUnit(5, texId);  // second diffuse on unit 5
+					} else {
+						printf("Only supports a Material with a maximum of 2 diffuse textures\n");
+					}
+				} else if (myMeshes[meshIdx].texTypes[i] == SPECULAR) {
+					renderer.setTexUnit(6, texId);      // specular map on unit 6
+					glUniform1i(renderer.getSpecularMapLoc(), GL_TRUE);
+				} else if (myMeshes[meshIdx].texTypes[i] == NORMALS) {
+					renderer.setTexUnit(7, texId);      // normal map on unit 7
+					glUniform1i(renderer.getNormalMapLoc(), GL_TRUE);
+				} else {
+					printf("Texture Map not supported\n");
+				}
+			}
+			// After the loop, tell the fragment shader how many diffuse maps are bound
+			glUniform1ui(renderer.getDiffMapCountLoc(), diffMapCount);
+		}
+
+
+        // --- MATRICES from mu (this fixes the “spawns at package” bug) ---
+        mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+        // Use your global uniform IDs that were set when the mesh program was bound
+        glUniformMatrix4fv(renderer.getVmLoc(),   1, GL_FALSE, mu.get(gmu::VIEW_MODEL));
+        glUniformMatrix4fv(renderer.getPvmLoc(),  1, GL_FALSE, mu.get(gmu::PROJ_VIEW_MODEL));
+        mu.computeNormalMatrix3x3();
+        glUniformMatrix3fv(renderer.getNormalLoc(), 1, GL_FALSE, mu.getNormalMatrix());
+
+        // --- Draw ---
+        glBindVertexArray(myMeshes[nd->mMeshes[n]].vao);
+        glDrawElements(myMeshes[nd->mMeshes[n]].type, myMeshes[nd->mMeshes[n]].numIndexes, GL_UNSIGNED_INT, 0);
+        glBindVertexArray(0);
+    }
+
+    // Recurse
+    for (unsigned int c = 0; c < nd->mNumChildren; ++c)
+        aiRecursive_render(nd->mChildren[c], myMeshes, textureIds);
+
+    mu.popMatrix(gmu::MODEL);
+}
+
+
+
+
+
 void drawPackage(dataMesh &data) {
     if (!currentPackage.active) return;
 
@@ -1070,6 +1225,7 @@ void drawPackage(dataMesh &data) {
     data.vm = mu.get(gmu::VIEW_MODEL);
     data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
     data.normal = mu.getNormalMatrix();
+	renderer.setIsModel(false);
     renderer.renderMesh(data);
 
     mu.popMatrix(gmu::MODEL);
@@ -1089,12 +1245,40 @@ void drawBirds(dataMesh& data) {
         data.vm = mu.get(gmu::VIEW_MODEL),
         data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
         data.normal = mu.getNormalMatrix();
+		renderer.setIsModel(false);
         renderer.renderMesh(data);
         mu.popMatrix(gmu::MODEL);
     }
 }
 
+
 void drawDrone(dataMesh &data) {
+    // isolate from prior draws
+    mu.pushMatrix(gmu::MODEL);
+    mu.loadIdentity(gmu::MODEL);
+
+    if (renderer.droneMeshes.size() > 0 && droneScene != nullptr) {
+        // world transform for the drone
+        mu.translate(gmu::MODEL, drone.pos[0], drone.pos[1], drone.pos[2]);
+        mu.rotate(gmu::MODEL, drone.yaw,   0, 1, 0);
+        mu.rotate(gmu::MODEL, drone.pitch, 0, 0, 1);
+        mu.rotate(gmu::MODEL, drone.roll,  1, 0, 0);
+
+        float augment = 1.0f;
+        mu.scale(gmu::MODEL,
+                 augment * droneImportedScale,
+                 augment * droneImportedScale,
+                 augment * droneImportedScale);
+
+        // render Assimp model relative to current MODEL
+		renderer.setIsModel(true);
+        aiRecursive_render(droneScene->mRootNode, renderer.droneMeshes, droneTextureIds);
+		renderer.setIsModel(false);
+
+        mu.popMatrix(gmu::MODEL);   // balance the first push
+        return;
+    }
+
     mu.pushMatrix(gmu::MODEL);
 	mu.translate(gmu::MODEL, drone.pos[0], drone.pos[1], drone.pos[2]);
 	mu.rotate(gmu::MODEL, drone.yaw,   0, 1, 0);
@@ -1124,6 +1308,7 @@ void drawDrone(dataMesh &data) {
 		data.vm = mu.get(gmu::VIEW_MODEL),
 		data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
 		data.normal = mu.getNormalMatrix();
+		renderer.setIsModel(false);
 		renderer.renderMesh(data);
 
 		mu.popMatrix(gmu::MODEL);
@@ -1317,10 +1502,10 @@ void renderSim(void) {
 
 	// prepare 3-component arrays for the renderer API
 	float dirEye3[3] = { dAux[0], dAux[1], dAux[2] };
-	float dirAmb[3]  = { 0.05f, 0.05f, 0.05f };
+	float dirAmb[3]  = { 0.2f, 0.2f, 0.2f };  // Increased ambient light
 	float sunIntensity = 2.0f; // 1.0 = same, 2.0 = twice as bright
-	float dirDiff[3] = { 0.40f * sunIntensity, 0.40f * sunIntensity, 0.40f * sunIntensity };
-	float dirSpec[3] = { 0.70f * sunIntensity, 0.70f * sunIntensity, 0.70f * sunIntensity };
+	float dirDiff[3] = { 0.6f * sunIntensity, 0.6f * sunIntensity, 0.6f * sunIntensity };  // Increased diffuse
+	float dirSpec[3] = { 0.8f * sunIntensity, 0.8f * sunIntensity, 0.8f * sunIntensity };  // Increased specular
 
 	// Query currently bound program (safe even if renderer hides program id)
 	GLint prog = 0;
@@ -1462,6 +1647,7 @@ void renderSim(void) {
 
 	}
 
+	renderer.setIsModel(false);
 	renderer.renderMesh(data);
 	mu.popMatrix(gmu::MODEL);
 
@@ -1503,7 +1689,8 @@ void renderSim(void) {
 				float col[4] = {1.0f, 0.2f, 0.2f, 1.0f}; // red = destination
 				memcpy(renderer.myMeshes[0].mat.diffuse, col, sizeof(col));
 			}
-
+			
+			renderer.setIsModel(false);
 			renderer.renderMesh(data);
 
 			// restore original diffuse so other objects not affected
@@ -1513,24 +1700,26 @@ void renderSim(void) {
 		}
 	}
 
-	// Update and draw birds
+	// Update timers and states
 	static int lastBirdTime = glutGet(GLUT_ELAPSED_TIME);
 	int nowBird = glutGet(GLUT_ELAPSED_TIME);
 	float dtBird = (nowBird - lastBirdTime) * 0.001f;
 	lastBirdTime = nowBird;
 	if (!isPaused) updateBirds(dtBird);
 
-	drawBirds(data);
-
-	// package logic update/check
-	checkPackagePickupAndDelivery();
-	drawPackage(data);
-
-	//Update Drone State
 	static int lastTime = glutGet(GLUT_ELAPSED_TIME);
 	int now = glutGet(GLUT_ELAPSED_TIME);
 	float dt = (now - lastTime) * 0.001f;
 	lastTime = now;
+
+	// Check game state and interactions first
+	checkPackagePickupAndDelivery();
+
+	// Draw objects in correct order and ensure model matrix is reset for each
+
+	drawBirds(data);  // Background elements first
+	drawPackage(data);  // Then package 
+	drawDrone(data);  // Draw drone last so it's on top
 
 	if (!isPaused && !isGameOver) {
 		updateBatteryAndDistance(dt);
@@ -1542,8 +1731,7 @@ void renderSim(void) {
 			drone.velocity[2] = 0.0f;
 		} else drone.pos[1] += DRONE_FALL_VELOCITY * dt;
 	} 
-
-	drawDrone(data);
+	
 
 	renderer.activateRenderMeshesShaderProg(); // ensure shader bound
 
@@ -1610,6 +1798,7 @@ void renderSim(void) {
 	}
 
 	// actually draw it
+	renderer.setIsModel(false);
 	renderer.renderMesh(data);
 	mu.popMatrix(gmu::MODEL);
 
@@ -1715,6 +1904,7 @@ void renderSim(void) {
 		data.vm  = mu.get(gmu::VIEW_MODEL);
 		data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
 		data.normal = mu.getNormalMatrix();
+		renderer.setIsModel(false);
 		renderer.renderMesh(data);
 		mu.popMatrix(gmu::MODEL);
 
@@ -1738,6 +1928,7 @@ void renderSim(void) {
 
 		data.vm  = mu.get(gmu::VIEW_MODEL);
 		data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+		renderer.setIsModel(false);
 		renderer.renderMesh(data);
 		mu.popMatrix(gmu::MODEL);
 
@@ -1881,12 +2072,30 @@ void buildScene()
 	else 
 		cerr << "Fonts loaded\n";
 
-	printf("\nNumber of Texture Objects is %d\n\n", renderer.TexObjArray.getNumTextureObjects());
+	// path to the folder containing drone.obj and its textures (relative to EXE)
+    std::string droneObj = "spider/spider.obj"; 
+
+    printf("[DRONE] Loading: %s\n", droneObj.c_str());
+
+	if (!Import3DFromFile(droneObj.c_str(), droneImporter, droneScene, droneImportedScale)) 
+		return;
+
+	strcpy(model_dir, "spider/");
+	// create meshes & textures for the drone model using the existing helper
+	renderer.droneMeshes = createMeshFromAssimp(droneScene, droneTextureIds);
+	if (!droneTextureIds) { printf("Drone textures not loaded\n"); }
+
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_CULL_FACE);
+	glEnable(GL_MULTISAMPLE);
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Back to black background
+
 
 	// set the camera position based on its spherical coordinates
 	camX = r * sin(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
 	camZ = r * cos(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
 	camY = r * sin(beta * 3.14f / 180.0f);
+
 }
 
 // ------------------------------------------------------------
@@ -1936,10 +2145,25 @@ int main(int argc, char **argv) {
 	glewExperimental = GL_TRUE;
 	glewInit();
 
-	// some GL settings
+	// Core OpenGL state setup
 	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LEQUAL);        // Ensure proper depth testing
+	glDepthMask(GL_TRUE);          // Enable depth writes by default
+	
+	// Face culling setup
 	glEnable(GL_CULL_FACE);
+	glCullFace(GL_BACK);          // Cull back faces
+	glFrontFace(GL_CCW);          // Counter-clockwise front faces
+	
+	// Blending setup for transparent objects
+	glDisable(GL_BLEND);          // Start with blending off
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glBlendEquation(GL_FUNC_ADD);
+	
+	// Multisampling for smoother edges
 	glEnable(GL_MULTISAMPLE);
+	
+	// Clear color - black background
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
 	printf ("Vendor: %s\n", glGetString (GL_VENDOR));

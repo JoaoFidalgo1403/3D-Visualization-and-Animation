@@ -145,22 +145,52 @@ bool Renderer::setRenderMeshesShaderProg(const std::string& vertShaderPath, cons
     glBindAttribLocation(program, Shader::VERTEX_COORD_ATTRIB, "position");
     glBindAttribLocation(program, Shader::NORMAL_ATTRIB, "normal");
     glBindAttribLocation(program, Shader::TEXTURE_COORD_ATTRIB, "texCoord");
+    glBindAttribLocation(program, Shader::TANGENT_ATTRIB, "tangent");
+	glBindAttribLocation(program, Shader::BITANGENT_ATTRIB, "bitangent");
 
     glLinkProgram(program);
-
+ 
     printf("InfoLog for Model Shaders and Program\n%s\n\n", shader.getAllInfoLogs().c_str());
     if (!shader.isProgramValid())
         printf("GLSL Model Program Not Valid!\n");
+        
+    glUseProgram(program);
+    // fixed bindings
+    glUniform1i(glGetUniformLocation(program, "texmap"),       0);
+    glUniform1i(glGetUniformLocation(program, "texmap1"),      1);
+    glUniform1i(glGetUniformLocation(program, "texmap2"),      2);
+    glUniform1i(glGetUniformLocation(program, "texmap3"),      3);
+    glUniform1i(glGetUniformLocation(program, "texUnitDiff0"), 4);
+    glUniform1i(glGetUniformLocation(program, "texUnitDiff1"), 5);
+    glUniform1i(glGetUniformLocation(program, "texUnitSpec"),  6);
+    glUniform1i(glGetUniformLocation(program, "texUnitNormal"),7);
+
+
+
+    // defaults for model flags
+    GLint u;
+    u = glGetUniformLocation(program, "normalMap");    if (u >= 0) glUniform1i(u, false);
+    u = glGetUniformLocation(program, "specularMap");  if (u >= 0) glUniform1i(u, false);
+    u = glGetUniformLocation(program, "diffMapCount");    if (u >= 0) glUniform1i(u, 0);
 
     pvm_loc = glGetUniformLocation(program, "m_pvm");
     vm_loc = glGetUniformLocation(program, "m_viewModel");
     normal_loc = glGetUniformLocation(program, "m_normal");
     texMode_loc = glGetUniformLocation(program, "texMode"); // different modes of texturing
     lpos_loc = glGetUniformLocation(program, "l_pos");
+    
     tex_loc[0] = glGetUniformLocation(program, "texmap");
     tex_loc[1] = glGetUniformLocation(program, "texmap1");
     tex_loc[2] = glGetUniformLocation(program, "texmap2");
     tex_loc[3] = glGetUniformLocation(program, "texmap3");
+    tex_loc[4] = glGetUniformLocation(program, "texUnitDiff0");  // diffuse map 0
+    tex_loc[5] = glGetUniformLocation(program, "texUnitDiff1");
+    tex_loc[6] = glGetUniformLocation(program, "texUnitSpec");    // optional spec map
+    tex_loc[7] = glGetUniformLocation(program, "texUnitNormal");  // optional normal map
+
+    normalMap_loc   = glGetUniformLocation(program, "normalMap");    // bool/int
+    specularMap_loc = glGetUniformLocation(program, "specularMap");  // bool/int
+    diffMapCount_loc   = glGetUniformLocation(program, "diffMapCount");    // int
 
 
     // --- query directional light uniforms ---
@@ -227,7 +257,7 @@ bool Renderer::setRenderMeshesShaderProg(const std::string& vertShaderPath, cons
         ss << "spotLights[" << i << "].quadratic";
         spot_quadratic_loc[i] = glGetUniformLocation(program, ss.str().c_str());
     }
-
+    
     return(shader.isProgramLinked() && shader.isProgramValid());
 }
 Renderer::~Renderer() {
@@ -330,6 +360,20 @@ void Renderer::setIsHud(bool isHud) {
 
     glUseProgram(prevProg); // restore previous
 }
+
+void Renderer::setIsModel(bool isModel) {
+    GLint prevProg = 0;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &prevProg);
+
+    // make sure this->program is the shader that contains is_Hud
+    glUseProgram(program); // program is your shader program handle
+    GLint loc = glGetUniformLocation(program, "uIsImportedModel");
+    if (loc != -1) glUniform1i(loc, isModel ? 1 : 0);
+
+    glUseProgram(prevProg); // restore previous
+}
+
+
 
 // helper
 static void safeNormalize3(float v[3]) {
@@ -455,6 +499,12 @@ void Renderer::setTexUnit(int tuId, int texObjId) {
     glUniform1i(tex_loc[tuId], tuId);
 }
 
+void Renderer::setTexUnit(int tuId, GLuint texId) {
+    glActiveTexture(GL_TEXTURE0 + tuId);
+    glBindTexture(GL_TEXTURE_2D, texId);
+    glUniform1i(tex_loc[tuId], tuId);
+}
+
 void Renderer::renderMesh(const dataMesh& data) {
     GLint loc;
 
@@ -531,5 +581,10 @@ void Renderer::renderText(const TextCommand& text) {
         }
     }
 }
+
+
+// GLuint Renderer::getTextureIdFromUnit(int tu) const {
+    // return TexObjArray.getTextureId(tu);
+// }
 
 
