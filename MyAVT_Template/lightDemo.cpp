@@ -57,6 +57,8 @@ int WinX = 1024, WinY = 768;
 unsigned int FrameCount = 0;
 bool isPaused = false;
 
+int iter = 0;
+
 // --- To import models ---
 Assimp::Importer droneImporter;
 
@@ -106,7 +108,8 @@ const float DRONE_BLINK_PERIOD = 0.12f;      // visual blink period while invuln
 const float BILLBOARD_SCALE = 0.2f;
 
 // --- Particle parameters ---
-const int MAX_PARTICLES = 1500;
+const int MAX_PARTICLES = 500;
+const float PARTICLE_SIZE = 0.1f;
 
 typedef struct {
 	float	life;		// vida
@@ -120,7 +123,7 @@ typedef struct {
 Particle particle[MAX_PARTICLES];
 int deadNumParticles = 0;
 
-bool fireworks = false;
+bool smoke_toggle = false;
 
 // runtime
 float collisionInvulnTimer = 0.0f; // counts down; >0 => invulnerable
@@ -332,6 +335,40 @@ void changeSize(int w, int h) {
 
 
 /// :::::::::::::::::::::::::::::::::::::::::::::::: PARTICLES :::::::::::::::::::::::::::::::::::::::::::::::::://///
+void initParticle_singular(Particle &particle) {
+	GLfloat v, theta, phi;	
+	v = 0.8*frand() + 0.2;
+	phi = frand()*M_PI;
+	theta = 2.0*frand()*M_PI;
+
+	particle.x = drone.pos[0];
+	particle.y = drone.pos[1];
+	particle.z = drone.pos[2];
+	particle.vx = v * cos(theta) * sin(phi);
+	particle.vy = v * cos(phi);
+	particle.vz = v * sin(theta) * sin(phi);
+	particle.ax = 0.1f; /* simular um pouco de vento */
+	particle.ay = -0.15f; /* simular a aceleração da gravidade */
+	particle.az = 0.0f;
+
+	/* tom amarelado que vai ser multiplicado pela textura que varia entre branco e preto */
+	particle.r = 1.0f;
+	particle.g = 1.0f;
+	particle.b = 1.0f;
+
+	particle.life = 1.0f;		/* vida inicial */
+	particle.fade = 0.0025f;	    /* step de decréscimo da vida para cada iteração */
+}
+
+
+void initParticles(void)
+{
+	for (int i = 0; i<MAX_PARTICLES; i++)
+	{
+		initParticle_singular(particle[i]);
+	}
+}
+
 void updateParticles()
 {
 	int i;
@@ -342,52 +379,23 @@ void updateParticles()
 
 	//h = 0.125f;
 	h = 0.033;
-	if (fireworks) {
 
-		for (i = 0; i < MAX_PARTICLES; i++)
-		{
-			particle[i].x += (h*particle[i].vx);
-			particle[i].y += (h*particle[i].vy);
-			particle[i].z += (h*particle[i].vz);
-			particle[i].vx += (h*particle[i].ax);
-			particle[i].vy += (h*particle[i].ay);
-			particle[i].vz += (h*particle[i].az);
-			particle[i].life -= particle[i].fade;
-		}
-	}
-}
-
-
-void initParticles(void)
-{
-	GLfloat v, theta, phi;
-	int i;
-
-	for (i = 0; i<MAX_PARTICLES; i++)
+	for (i = 0; i < MAX_PARTICLES; i++)
 	{
-		v = 0.8*frand() + 0.2;
-		phi = frand()*M_PI;
-		theta = 2.0*frand()*M_PI;
-
-		particle[i].x = 0.0f;
-		particle[i].y = 10.0f;
-		particle[i].z = 0.0f;
-		particle[i].vx = v * cos(theta) * sin(phi);
-		particle[i].vy = v * cos(phi);
-		particle[i].vz = v * sin(theta) * sin(phi);
-		particle[i].ax = 0.1f; /* simular um pouco de vento */
-		particle[i].ay = -0.15f; /* simular a aceleração da gravidade */
-		particle[i].az = 0.0f;
-
-		/* tom amarelado que vai ser multiplicado pela textura que varia entre branco e preto */
-		particle[i].r = 0.882f;
-		particle[i].g = 0.552f;
-		particle[i].b = 0.211f;
-
-		particle[i].life = 1.0f;		/* vida inicial */
-		particle[i].fade = 0.0025f;	    /* step de decréscimo da vida para cada iteração */
+		if (particle[i].life < 0.0f) {
+			initParticle_singular(particle[i]);
+		}
+		
+		particle[i].x += (h*particle[i].vx);
+		particle[i].y += (h*particle[i].vy);
+		particle[i].z += (h*particle[i].vz);
+		particle[i].vx += (h*particle[i].ax);
+		particle[i].vy += (h*particle[i].ay);
+		particle[i].vz += (h*particle[i].az);
+		particle[i].life -= particle[i].fade;
 	}
 }
+
 
 // -----------------------------------------------------------
 //
@@ -1464,7 +1472,7 @@ void updatePointLightsFromBuildings()
 void renderSim(void) {
 	FrameCount++;
 
-	float cameraPos[3], billBoardPos[3];
+	float cameraPos[3], billBoardPos[3], particlePos[3];
 	float particle_color[4];
 
 	static int lastFrameTime = glutGet(GLUT_ELAPSED_TIME);
@@ -1751,43 +1759,6 @@ void renderSim(void) {
 	mu.popMatrix(gmu::MODEL);
 
 
-	// Draw the Billboards
-
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	
-	renderer.setTexUnit(3, 4); // Billboard texture
-
-	data.meshID = 6; // Quad mesh for the billboards
-	for (int i=0; i<10; i++) {
-		for (int j=0; j<10; j++){
-			mu.pushMatrix(gmu::MODEL);
-
-			billBoardPos[0] = i*10.0f; billBoardPos[1] = 3.0f; billBoardPos[2] = j*10.0f;
-
-			mu.translate(gmu::MODEL, billBoardPos[0], billBoardPos[1], billBoardPos[2]);
-			mu.scale(gmu::MODEL, BILLBOARD_SCALE, BILLBOARD_SCALE, BILLBOARD_SCALE); // Billboard size
-
-			l3dBillboardCylindricalBegin(cameraPos, billBoardPos);
-
-			data.texMode = 5;   //modulate diffuse color with texel color
-			data.vm = mu.get(gmu::VIEW_MODEL);
-			data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
-			data.normal = mu.getNormalMatrix();
-
-			mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
-			mu.computeNormalMatrix3x3();
-
-			renderer.renderMesh(data);
-			mu.popMatrix(gmu::MODEL);
-		}
-	}
-
-	//glDisable(GL_BLEND);
-
-	renderer.setTexUnit(3, 3); // Reset to default texture unit
-
-
 	// Draw the Buildings
 	data.meshID = 0; // For the cube (myMeshes[0])
 	for (int i=0; i<6; ++i) {  // Draw the other objects in the scene (myMeshes[0] to myMeshes[5])
@@ -1857,6 +1828,103 @@ void renderSim(void) {
 	drawBirds(data);  // Background elements first
 	drawPackage(data);  // Then package 
 	drawDrone(data);  // Draw drone last so it's on top
+
+
+	// Draw the Billboards
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	
+	renderer.setTexUnit(3, 4); // Billboard texture
+
+	data.meshID = 6; // Quad mesh for the billboards
+	for (int i=0; i<10; i++) {
+		for (int j=0; j<10; j++){
+			mu.pushMatrix(gmu::MODEL);
+
+			billBoardPos[0] = i*10.0f; billBoardPos[1] = 3.0f; billBoardPos[2] = j*10.0f;
+
+			mu.translate(gmu::MODEL, billBoardPos[0], billBoardPos[1], billBoardPos[2]);
+			mu.scale(gmu::MODEL, BILLBOARD_SCALE, BILLBOARD_SCALE, BILLBOARD_SCALE); // Billboard size
+
+			l3dBillboardCylindricalBegin(cameraPos, billBoardPos);
+
+			data.texMode = 5;   //modulate diffuse color with texel color
+			data.vm = mu.get(gmu::VIEW_MODEL);
+			data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+			data.normal = mu.getNormalMatrix();
+
+			mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+			mu.computeNormalMatrix3x3();
+
+			renderer.renderMesh(data);
+			mu.popMatrix(gmu::MODEL);
+		}
+	}
+
+	glDisable(GL_BLEND);
+	renderer.setTexUnit(3, 3); // Reset to default texture unit
+
+	// Draw Particles (smoke) when battery low
+	if (!smoke_toggle && batteryLevel <= 0.7f) {
+		initParticles();
+		smoke_toggle = true;
+		printf("Particles Initialized\n");
+	}
+	
+	if(smoke_toggle){
+		printf("Iteration %d\n", iter++);
+		printf("Rendering Particles...\n");
+		updateParticles();
+		printf("Particles Updated!!\n");
+
+		data.meshID = 6; // For the quad
+		renderer.setTexUnit(3, 5);  //particle texture
+		data.texMode = 6;
+
+
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+		glDepthMask(GL_FALSE);  //Depth Buffer Read Only
+
+
+		for (int i = 0; i < MAX_PARTICLES; i++)
+		{
+			particle_color[0] = particle[i].r;
+			particle_color[1] = particle[i].g;
+			particle_color[2] = particle[i].b;
+			particle_color[3] = particle[i].life;
+
+			// send the material - diffuse color modulated with texture
+			GLint loc;
+			loc = glGetUniformLocation(prog, "mat.diffuse");
+			glUniform4fv(loc, 1, particle_color);
+
+			mu.pushMatrix(gmu::MODEL);
+			mu.translate(gmu::MODEL, particle[i].x, particle[i].y, particle[i].z);
+			mu.scale(gmu::MODEL, PARTICLE_SIZE, PARTICLE_SIZE, PARTICLE_SIZE); // Particle size
+
+			particlePos[0] = particle[i].x; particlePos[1] = particle[i].y; particlePos[2] = particle[i].z;
+			l3dBillboardSphericalBegin(cameraPos, particlePos);
+
+			data.vm = mu.get(gmu::VIEW_MODEL);
+			data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+			data.normal = mu.getNormalMatrix();
+
+			// send matrices to OGL
+			mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+			mu.computeNormalMatrix3x3();
+
+			renderer.renderMesh(data);
+			mu.popMatrix(gmu::MODEL);
+		}
+		printf("...Particles Rendered\n");
+
+		glDepthMask(GL_TRUE); //make depth buffer again writeable
+		renderer.setTexUnit(3, 3); // Reset to default texture unit
+
+	}
+
 
 	if (!isPaused && !isGameOver) {
 		updateBatteryAndDistance(dt);
