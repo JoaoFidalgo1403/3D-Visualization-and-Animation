@@ -57,8 +57,6 @@ int WinX = 1024, WinY = 768;
 unsigned int FrameCount = 0;
 bool isPaused = false;
 
-int iter = 0;
-
 // --- To import models ---
 Assimp::Importer droneImporter;
 
@@ -109,13 +107,19 @@ const float BILLBOARD_SCALE = 0.2f;
 
 // --- Particle parameters ---
 const int MAX_PARTICLES = 500;
-const float PARTICLE_SIZE = 0.1f;
+const float PARTICLE_SIZE = 0.05f;
+const float BATTERY_STAGES[3] = { 0.6f, 0.4f, 0.15f };
+
+int particlesPerSpawn = 1;
+float particleSpawnRate = 0.02f; 	// spawn interval in seconds (≈33 Hz)
+float particleSpawnAcumulator = 0.0f;
+int nextParticleIndex = 0;            		// ring index for reuse
 
 typedef struct {
 	float	life;		// vida
 	float	fade;		// fade
 	float	r, g, b;    // color
-	GLfloat x, y, z;    // posi‹o
+	GLfloat x, y, z;    // position
 	GLfloat vx, vy, vz; // velocidade 
 	GLfloat ax, ay, az; // acelera‹o
 } Particle;
@@ -335,8 +339,8 @@ void changeSize(int w, int h) {
 
 
 /// :::::::::::::::::::::::::::::::::::::::::::::::: PARTICLES :::::::::::::::::::::::::::::::::::::::::::::::::://///
-void initParticle_singular(Particle &particle) {
-	GLfloat v, theta, phi;	
+void initParticle_singular(Particle &particle, float color) {
+	GLfloat v, theta, phi;
 	v = 0.8*frand() + 0.2;
 	phi = frand()*M_PI;
 	theta = 2.0*frand()*M_PI;
@@ -350,41 +354,46 @@ void initParticle_singular(Particle &particle) {
 	particle.ax = 0.1f; /* simular um pouco de vento */
 	particle.ay = -0.15f; /* simular a aceleração da gravidade */
 	particle.az = 0.0f;
-
-	/* tom amarelado que vai ser multiplicado pela textura que varia entre branco e preto */
-	particle.r = 1.0f;
-	particle.g = 1.0f;
-	particle.b = 1.0f;
+	
+	particle.r = color;
+	particle.g = color;
+	particle.b = color;
 
 	particle.life = 1.0f;		/* vida inicial */
-	particle.fade = 0.0025f;	    /* step de decréscimo da vida para cada iteração */
+	particle.fade = 0.005f;	    /* step de decréscimo da vida para cada iteração */
 }
 
 
-void initParticles(void)
-{
+void initParticles(float color)
+{	
 	for (int i = 0; i<MAX_PARTICLES; i++)
 	{
-		initParticle_singular(particle[i]);
+		initParticle_singular(particle[i], color);
 		particle[i].life = -1.0f; /* dead particle */
 	}
 }
 
-void updateParticles()
+void updateParticles(float dt, float color)
 {
-	int i;
-	float h;
+	particleSpawnAcumulator += dt;
+	while (particleSpawnAcumulator >= particleSpawnRate) {
+		for (int s = 0; s < particlesPerSpawn; ++s) {
+			initParticle_singular(particle[nextParticleIndex], color);
+			particle[nextParticleIndex].life = 1.0f; // revive particle
 
+			nextParticleIndex = (nextParticleIndex + 1) % MAX_PARTICLES;
+		}
+		particleSpawnAcumulator -= particleSpawnRate;
+	}
 	/* Método de Euler de integração de eq. diferenciais ordinárias
 	h representa o step de tempo; dv/dt = a; dx/dt = v; e conhecem-se os valores iniciais de x e v */
 
-	//h = 0.125f;
-	h = 0.033;
+	float h = 0.033;
 
-	for (i = 0; i < MAX_PARTICLES; i++)
+	for (int i = 0; i < MAX_PARTICLES; i++)
 	{
 		if (particle[i].life < 0.0f) {
-			initParticle_singular(particle[i]);
+			initParticle_singular(particle[i], color);
 		}
 		
 		particle[i].x += (h*particle[i].vx);
@@ -393,7 +402,7 @@ void updateParticles()
 		particle[i].vx += (h*particle[i].ax);
 		particle[i].vy += (h*particle[i].ay);
 		particle[i].vz += (h*particle[i].az);
-		particle[i].life -= particle[i].fade;
+		particle[i].life -= particle[i].fade * dt;
 	}
 }
 
@@ -511,6 +520,7 @@ void checkPackagePickupAndDelivery() {
             int gained = (int)roundf(batteryLevel * 100.0f); // points proportional to remaining battery
             scorePoints += gained;
             batteryLevel = 1.0f; // refill battery on delivery
+			smoke_toggle = false;
             printf("[PACKAGE] delivered to (%d,%d). +%d points. Battery refilled.\n",
                    currentPackage.dst_i, currentPackage.dst_j, gained);
 
@@ -535,6 +545,7 @@ void resetGameState() {
     scorePoints = 0;
 	collisionInvulnTimer = 0.0f;
     isGameOver = false;
+	smoke_toggle = false;
 
     // reset drone
     drone = Drone();
@@ -1866,17 +1877,26 @@ void renderSim(void) {
 	renderer.setTexUnit(3, 3); // Reset to default texture unit
 
 	// Draw Particles (smoke) when battery low
-	if (!smoke_toggle && batteryLevel <= 0.7f) {
-		initParticles();
+	if (!smoke_toggle && batteryLevel <= BATTERY_STAGES[0]) {
+		initParticles(0.8f);
 		smoke_toggle = true;
-		printf("Particles Initialized\n");
 	}
 	
 	if(smoke_toggle){
-		printf("Iteration %d\n", iter++);
-		printf("Rendering Particles...\n");
-		updateParticles();
-		printf("Particles Updated!!\n");
+		
+		float color, particle_rate;
+
+		if (batteryLevel <= BATTERY_STAGES[2]) {
+			color = 0.1f; particlesPerSpawn = 5; particleSpawnRate = 0.1f;
+		} else if (batteryLevel <= BATTERY_STAGES[1]) {
+			color = 0.5f; particlesPerSpawn = 10; particleSpawnRate = 0.5f;
+		} else if (batteryLevel <= BATTERY_STAGES[0]) {
+			color = 0.8f; particlesPerSpawn = 20; particleSpawnRate = 1.5f;
+		} else { 
+			color = 1.0f;
+		}
+		
+		updateParticles(dt, color);
 
 		data.meshID = 6; // For the quad
 		renderer.setTexUnit(3, 5);  //particle texture
@@ -1891,16 +1911,6 @@ void renderSim(void) {
 
 		for (int i = 0; i < MAX_PARTICLES; i++)
 		{
-			particle_color[0] = particle[i].r;
-			particle_color[1] = particle[i].g;
-			particle_color[2] = particle[i].b;
-			particle_color[3] = particle[i].life;
-
-			// send the material - diffuse color modulated with texture
-			GLint loc;
-			loc = glGetUniformLocation(prog, "mat.diffuse");
-			glUniform4fv(loc, 1, particle_color);
-
 			mu.pushMatrix(gmu::MODEL);
 			mu.translate(gmu::MODEL, particle[i].x, particle[i].y, particle[i].z);
 			mu.scale(gmu::MODEL, PARTICLE_SIZE, PARTICLE_SIZE, PARTICLE_SIZE); // Particle size
@@ -1916,11 +1926,24 @@ void renderSim(void) {
 			mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
 			mu.computeNormalMatrix3x3();
 
+			// save
+			float savedDiffuse[4];
+			memcpy(savedDiffuse, renderer.myMeshes[data.meshID].mat.diffuse, sizeof(savedDiffuse));
+
+			// set to particle color
+			renderer.myMeshes[data.meshID].mat.diffuse[0] = particle[i].r;
+			renderer.myMeshes[data.meshID].mat.diffuse[1] = particle[i].g;
+			renderer.myMeshes[data.meshID].mat.diffuse[2] = particle[i].b;
+			renderer.myMeshes[data.meshID].mat.diffuse[3] = particle[i].life; // alpha
+
+			// render
 			renderer.renderMesh(data);
+
+			// restore
+			memcpy(renderer.myMeshes[data.meshID].mat.diffuse, savedDiffuse, sizeof(savedDiffuse));
+
 			mu.popMatrix(gmu::MODEL);
 		}
-		printf("...Particles Rendered\n");
-
 		glDepthMask(GL_TRUE); //make depth buffer again writeable
 		renderer.setTexUnit(3, 3); // Reset to default texture unit
 
@@ -2025,9 +2048,8 @@ void renderSim(void) {
 		glDisable(GL_DEPTH_TEST);
 		char distBuf[32];
 		snprintf(distBuf, sizeof(distBuf), "%.2f", distanceTraveled);
-		TextCommand textCmd = { std::string("Distance Flown: ") + distBuf +
-								"\n\nScore: " + std::to_string(scorePoints),
-								{30, 650}, 0.3f };
+		TextCommand Distance_Flown_Text = { std::string("Distance Flown: ") + distBuf, {10, 20}, 0.3f };
+		TextCommand Score_Text = { "Score: " + std::to_string(scorePoints), {850, 20}, 0.3f };
 		//the glyph contains transparent background colors and non-transparent for the actual character pixels. So we use the blending
 		glEnable(GL_BLEND);  
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -2042,8 +2064,10 @@ void renderSim(void) {
 		mu.loadIdentity(gmu::PROJECTION);
 		mu.ortho(m_viewport[0], m_viewport[0] + m_viewport[2] - 1, m_viewport[1], m_viewport[1] + m_viewport[3] - 1, -1, 1);
 		mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
-		textCmd.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
-		renderer.renderText(textCmd);
+		Distance_Flown_Text.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+		renderer.renderText(Distance_Flown_Text);
+		Score_Text.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+		renderer.renderText(Score_Text);
 
 		// --- Game Over centered message ---
 		if (isGameOver) {

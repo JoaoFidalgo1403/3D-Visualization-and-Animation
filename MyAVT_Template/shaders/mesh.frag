@@ -230,9 +230,9 @@ void main() {
         } else if (texMode == 6) { // Used for Particles
             vec4 texel = texture(texmap3, DataIn.tex_coord);
             
-            if((texel.a < 0.40)  || (mat.diffuse.a == 0.0) ) discard;
+            if((texel.a < 0.20)  || (mat.diffuse.a == 0.0) ) discard;
             else
-                colorOut = mat.diffuse * texel;
+                colorOut = vec4(0.8 * mat.diffuse.rgb + 0.2 * texel.rgb, texel.a);
         } else {
             vec2 tiledTC1 = DataIn.tex_coord * terrainTile1;
             vec2 tiledTC2 = DataIn.tex_coord * terrainTile2;
