@@ -45,6 +45,8 @@
 #include "Texture_Loader.h"
 #include "meshFromAssimp.h"
 
+#include <random>
+
 using namespace std;
 
 #define frand()			((float)rand()/RAND_MAX)
@@ -61,16 +63,19 @@ int iter = 0;
 
 // --- To import models ---
 Assimp::Importer droneImporter;
+Assimp::Importer towerImporter;
 
 // the global Assimp scene object
 const aiScene* droneScene;
+const aiScene* towerScene;
 
 // scale factor for the Assimp model to fit in the window
 float droneImportedScale;
+float towerImportedScale;
 
 // --- Drone Model Data ---
 GLuint* droneTextureIds;       // texture array for the drone (filled by createMeshFromAssimp)
-bool droneModelLoaded = false;
+GLuint* towerTextureIds;
 
 char model_dir[50];  //initialized by the user input at the console
 
@@ -108,7 +113,7 @@ const float DRONE_BLINK_PERIOD = 0.12f;      // visual blink period while invuln
 const float BILLBOARD_SCALE = 0.2f;
 
 // --- Particle parameters ---
-const int MAX_PARTICLES = 500;
+const int MAX_PARTICLES = 1;
 const float PARTICLE_SIZE = 0.1f;
 
 typedef struct {
@@ -257,6 +262,12 @@ struct Package {
 const float CITY_CENTER[3] = {35.0f, 0.0f, 35.0f};
 
 // Buildings Scale
+// --- Per-cell floating params for towers (visual + later physics) ---
+static float gTowerBaseOffset[6][6];  // static vertical offset per cell (makes towers start at different heights)
+static float gTowerFloatAmp[6][6];    // bob amplitude per cell
+static float gTowerFloatPhase[6][6];  // random phase per cell
+static float gTowerFloatSpeed[6][6];  // bob speed (rad/s) per cell
+
 const float BUILDING_WIDTH = 10.0f;
 const float BUILDING_DEPTH = 10.0f;
 
@@ -1348,7 +1359,6 @@ void drawBirds(dataMesh& data) {
 void drawDrone(dataMesh &data) {
     // isolate from prior draws
     mu.pushMatrix(gmu::MODEL);
-    mu.loadIdentity(gmu::MODEL);
 
     if (renderer.droneMeshes.size() > 0 && droneScene != nullptr) {
         // world transform for the drone
@@ -1752,7 +1762,6 @@ void renderSim(void) {
 		GLint loc_tile2 = glGetUniformLocation(prog, "terrainTile2");
 		if (loc_tile1 >= 0) glUniform2f(loc_tile1, 64.0f, 64.0f);
 		if (loc_tile2 >= 0) glUniform2f(loc_tile2, 32.0f, 32.0f);
-
 	}
 
 	renderer.setIsModel(false);
@@ -1760,54 +1769,89 @@ void renderSim(void) {
 	mu.popMatrix(gmu::MODEL);
 
 
+	glDisable(GL_CULL_FACE); // disable culling to see the buildings' inner faces
+
+	// time for animation (use your engine's clock if different)
+	const float tSeconds = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+
 	// Draw the Buildings
-	data.meshID = 0; // For the cube (myMeshes[0])
-	for (int i=0; i<6; ++i) {  // Draw the other objects in the scene (myMeshes[0] to myMeshes[5])
-		for (int j=0; j<6; ++j) {
+	data.meshID = 0; // (kept, but not used for the tower)
+
+	for (int i = 0; i < 6; ++i) {
+		for (int j = 0; j < 6; ++j) {
 
 			bool skip = false;
-			for (auto &p : openAreas) {
-				if (p.first == i && p.second == j) {
-					skip = true;
-					break;
+			for (auto& p : openAreas) {
+				if (p.first == i && p.second == j) { skip = true; break; }
+			}
+			if (skip || ((i == 1 || i == 2) && j == 1)) continue;
+
+			mu.pushMatrix(gmu::MODEL);
+
+			// base position: center of the cell
+			const float worldX = -20.0f + i * 20.0f + BUILDING_WIDTH  * 0.5f;
+			const float worldZ = -20.0f + j * 20.0f + BUILDING_DEPTH  * 0.5f;
+
+			// --- floating effect (per-cell) ---
+			const float yBob =
+				gTowerBaseOffset[i][j] +
+				std::sin(tSeconds * gTowerFloatSpeed[i][j] + gTowerFloatPhase[i][j]) *
+				gTowerFloatAmp[i][j];
+
+			const float worldY = 20.0f + yBob;  // your previous baseline (20) + float offset
+
+			mu.translate(gmu::MODEL, worldX, worldY, worldZ);
+
+			if (renderer.droneMeshes.size() > 0 && towerScene != nullptr) {
+
+				const float TOWER_FIT_SCALE = 2.0f; // your current scale
+				mu.scale(gmu::MODEL, TOWER_FIT_SCALE, TOWER_FIT_SCALE, TOWER_FIT_SCALE);
+
+				// Optional: rotate to align fronts
+				// mu.rotate(gmu::MODEL, 180.0f, 0, 1, 0);
+
+				mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+				mu.computeNormalMatrix3x3();
+
+				// set matrices to shader
+				data.texMode = 1; // textured
+				data.vm     = mu.get(gmu::VIEW_MODEL);
+				data.pvm    = mu.get(gmu::PROJ_VIEW_MODEL);
+				data.normal = mu.getNormalMatrix();
+
+				// highlight package source/destination: tint first tower mesh
+				float savedDiffuse[4] = {0,0,0,0};
+				bool  changed = false;
+				if (currentPackage.active) {
+					bool isSrc = (!currentPackage.pickedUp && i == currentPackage.src_i && j == currentPackage.src_j);
+					bool isDst = ( currentPackage.pickedUp && i == currentPackage.dst_i && j == currentPackage.dst_j);
+					if (isSrc || isDst) {
+						if (!renderer.towerMeshes.empty()) {
+							memcpy(savedDiffuse, renderer.towerMeshes[0].mat.diffuse, sizeof(savedDiffuse));
+							float col[4] = { isSrc ? 0.2f : 1.0f, isSrc ? 1.0f : 0.2f, 0.2f, 1.0f };
+							memcpy(renderer.towerMeshes[0].mat.diffuse, col, sizeof(col));
+							changed = true;
+						}
+					}
+				}
+
+				renderer.setIsModel(true);
+				aiRecursive_render(towerScene->mRootNode, renderer.towerMeshes, towerTextureIds);
+				renderer.setIsModel(false);
+
+				if (changed) {
+					memcpy(renderer.towerMeshes[0].mat.diffuse, savedDiffuse, sizeof(savedDiffuse));
 				}
 			}
-			if (skip || ((i == 1 || i == 2) && j == 1)) continue; // skip this iteration
-
-			data.texMode = 0; //no texturing
-			mu.pushMatrix(gmu::MODEL);
-			mu.translate(gmu::MODEL, -20.0f + i * 20.0f, 0.0f, -20.0f + j * 20.0f);
-			mu.scale(gmu::MODEL, BUILDING_WIDTH, cubeHeights[i][j], BUILDING_DEPTH);
-
-			mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
-			mu.computeNormalMatrix3x3();
-
-			data.texMode = 1;   //modulate diffuse color with texel color
-			data.vm = mu.get(gmu::VIEW_MODEL),
-			data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
-			data.normal = mu.getNormalMatrix();
-
-			// highlight package source/destination: temporarily modify the cube's diffuse color
-			float savedDiffuse[4];
-			memcpy(savedDiffuse, renderer.myMeshes[0].mat.diffuse, sizeof(savedDiffuse));
-
-			if (currentPackage.active && !currentPackage.pickedUp && i == currentPackage.src_i && j == currentPackage.src_j) {
-				float col[4] = {0.2f, 1.0f, 0.2f, 1.0f}; // green = source
-				memcpy(renderer.myMeshes[0].mat.diffuse, col, sizeof(col));
-			} else if (currentPackage.active && currentPackage.dst_i == i && currentPackage.dst_j == j) {
-				float col[4] = {1.0f, 0.2f, 0.2f, 1.0f}; // red = destination
-				memcpy(renderer.myMeshes[0].mat.diffuse, col, sizeof(col));
-			}
-			
-			renderer.setIsModel(false);
-			renderer.renderMesh(data);
-
-			// restore original diffuse so other objects not affected
-			memcpy(renderer.myMeshes[0].mat.diffuse, savedDiffuse, sizeof(savedDiffuse));
 
 			mu.popMatrix(gmu::MODEL);
 		}
 	}
+
+	glEnable(GL_CULL_FACE); // re-enable culling for other objects
+
+
+
 
 	// Update timers and states
 	static int lastBirdTime = glutGet(GLUT_ELAPSED_TIME);
@@ -2159,6 +2203,27 @@ void renderSim(void) {
 // Scene building with basic geometry
 //
 
+static void initTowerFloating()
+{
+    std::mt19937 rng(12345); // change seed if you want a different layout each run
+
+    // tweak ranges to taste
+    std::uniform_real_distribution<float> baseDist(-5.0f,  5.0f);   // static lift (units)
+    std::uniform_real_distribution<float> ampDist ( 0.5f,  2.0f);   // bob amplitude (units)
+    std::uniform_real_distribution<float> phaseDist( 0.0f,  6.2831853f); // 0..2π
+    std::uniform_real_distribution<float> speedDist( 0.3f,  0.7f);   // radians per second
+
+    for (int i = 0; i < 6; ++i) {
+        for (int j = 0; j < 6; ++j) {
+            gTowerBaseOffset[i][j] = baseDist(rng);
+            gTowerFloatAmp[i][j]   = ampDist(rng);
+            gTowerFloatPhase[i][j] = phaseDist(rng);
+            gTowerFloatSpeed[i][j] = speedDist(rng);
+        }
+    }
+}
+
+
 void buildScene()
 {
 	//Texture Object definition
@@ -2272,17 +2337,15 @@ void buildScene()
 	amesh.mat.texCount = 0;
 	renderer.myMeshes.push_back(amesh);
 
-	//The truetypeInit creates a texture object in TexObjArray for storing the fontAtlasTexture
-	
+	// -------- LOAD FONTS --------	
 	fontLoaded = renderer.truetypeInit(fontPathFile);
 	if (!fontLoaded)
 		cerr << "Fonts not loaded\n";
 	else 
 		cerr << "Fonts loaded\n";
 
-	// path to the folder containing drone.obj and its textures (relative to EXE)
-    std::string droneObj = "drone/drone.obj"; 
-
+	// -------- DRONE MODEL --------
+	std::string droneObj = "drone/drone.obj"; 
     printf("[DRONE] Loading: %s\n", droneObj.c_str());
 
 	if (!Import3DFromFile(droneObj.c_str(), droneImporter, droneScene, droneImportedScale)) 
@@ -2293,16 +2356,33 @@ void buildScene()
 	renderer.droneMeshes = createMeshFromAssimp(droneScene, droneTextureIds);
 	if (!droneTextureIds) { printf("Drone textures not loaded\n"); }
 
+	// -------- TOWER MODEL --------
+
+    std::string towerObj = "beta_tower/beta_tower.obj";  // folder next to your EXE
+    printf("[TOWER] Loading: %s\n", towerObj.c_str());
+
+    if (!Import3DFromFile(towerObj.c_str(), towerImporter, towerScene, towerImportedScale))
+        return;
+    
+    strcpy(model_dir, "beta_tower/");
+	// create meshes & textures for the drone model using the existing helper
+	renderer.towerMeshes = createMeshFromAssimp(towerScene, towerTextureIds);
+    if (!towerTextureIds) { printf("Tower textures not loaded\n"); }
+
+
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_MULTISAMPLE);
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Back to black background
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); 
 
 
 	// set the camera position based on its spherical coordinates
 	camX = r * sin(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
 	camZ = r * cos(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
 	camY = r * sin(beta * 3.14f / 180.0f);
+
+	// Initialize tower floating parameters
+	initTowerFloating();
 
 }
 
