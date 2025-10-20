@@ -8,7 +8,7 @@ Pds 1
 Pl 1
 Ka 1 1 1
 Kd 1 1 1
-Ke 1 1 1
+Ke 1 0.3 0 
 map_Kd emissiveMap1.png
 
 newmtl MAT_Metal

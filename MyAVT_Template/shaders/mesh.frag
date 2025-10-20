@@ -11,8 +11,8 @@ uniform sampler2D texmap3;
 
 // ---------- Imported model-specific flags ----------
 uniform uint  diffMapCount;       // 0 = none, 1 = texUnitDiff0, 2 = texUnitDiff0 * texUnitDiff1
-uniform bool normalMap;
-uniform bool specularMap;
+uniform bool  normalMap;
+uniform bool  specularMap;
 
 // ---------- Imported model-specific samplers ----------
 uniform sampler2D texUnitDiff0;
@@ -42,7 +42,7 @@ in Data {
     vec3 lightDir;   // legacy single light (eye-space) or tangent-space when using normal map
     vec2 tex_coord;
     vec3 fragPos;    // eye-space frag pos
-    mat3 TBN;
+    mat3 TBN;        // tangent->eye (or tangent->world) basis
 } DataIn;
 
 // ---------- Modes / misc ----------
@@ -100,10 +100,9 @@ uniform int        numSpotLights;
 uniform vec2 terrainTile1;
 uniform vec2 terrainTile2;
 
-// ---------- Lighting helpers ----------
+// ---------- Lighting helpers (use mat.*) ----------
 vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir) {
-    // light.direction is the direction of light rays (e.g. (0,-1,0) points downward)
-    vec3 L = normalize(-light.direction); // vector from fragment toward light
+    vec3 L = normalize(-light.direction);
     float diff = max(dot(normal, L), 0.0);
     vec3 H = normalize(L + viewDir);
     float specFactor = 0.0;
@@ -116,7 +115,7 @@ vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir) {
 }
 
 vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir) {
-    vec3 L = normalize(light.position - fragPos); // from frag to light
+    vec3 L = normalize(light.position - fragPos);
     float diff = max(dot(normal, L), 0.0);
     vec3 H = normalize(L + viewDir);
     float specFactor = 0.0;
@@ -132,19 +131,13 @@ vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir) {
 }
 
 vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir) {
-    vec3 LtoFrag = normalize(fragPos - light.position); // vector pointing from light to fragment
-    float cosTheta = dot(LtoFrag, normalize(light.direction)); // high when inside cone
+    vec3 LtoFrag = normalize(fragPos - light.position);
+    float cosTheta = dot(LtoFrag, normalize(light.direction));
+    if (cosTheta <= light.outerCutOff) return vec3(0.0);
 
-    if (cosTheta <= light.outerCutOff) {
-        // outside outer cone -> no contribution
-        return vec3(0.0);
-    }
-
-    // smoothstep between outer and inner cones
     float epsilon = light.cutOff - light.outerCutOff;
     float intensity = clamp((cosTheta - light.outerCutOff) / max(epsilon, 1e-6), 0.0, 1.0);
 
-    // now compute standard point-light terms (using L from frag to light)
     vec3 L = normalize(light.position - fragPos);
     float diff = max(dot(normal, L), 0.0);
     vec3 H = normalize(L + viewDir);
@@ -161,6 +154,56 @@ vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir) {
     return ambient + diffuse + specular;
 }
 
+// ---------- Parameterized helpers (for imported models using their textures) ----------
+vec3 CalcDirLight_M(DirLight light, vec3 n, vec3 v, vec3 ambC, vec3 diffC, vec3 specC, float shininess) {
+    vec3 L = normalize(-light.direction);
+    float diff = max(dot(n, L), 0.0);
+    vec3 H = normalize(L + v);
+    float s = (diff > 0.0) ? pow(max(dot(n, H), 0.0), shininess) : 0.0;
+
+    vec3 ambient  = light.ambient * ambC;
+    vec3 diffuse  = light.diffuse * (diff * diffC);
+    vec3 specular = light.specular * (s    * specC);
+    return ambient + diffuse + specular;
+}
+
+vec3 CalcPointLight_M(PointLight light, vec3 n, vec3 p, vec3 v, vec3 ambC, vec3 diffC, vec3 specC, float shininess) {
+    vec3 L = normalize(light.position - p);
+    float diff = max(dot(n, L), 0.0);
+    vec3 H = normalize(L + v);
+    float s = (diff > 0.0) ? pow(max(dot(n, H), 0.0), shininess) : 0.0;
+
+    float d = length(light.position - p);
+    float att = 1.0 / (light.constant + light.linear * d + light.quadratic * d * d);
+
+    vec3 ambient  = light.ambient * ambC * att;
+    vec3 diffuse  = light.diffuse * (diff * diffC) * att;
+    vec3 specular = light.specular * (s    * specC) * att;
+    return ambient + diffuse + specular;
+}
+
+vec3 CalcSpotLight_M(SpotLight light, vec3 n, vec3 p, vec3 v, vec3 ambC, vec3 diffC, vec3 specC, float shininess) {
+    vec3 LtoFrag = normalize(p - light.position);
+    float cosTheta = dot(LtoFrag, normalize(light.direction));
+    if (cosTheta <= light.outerCutOff) return vec3(0.0);
+
+    float epsilon = light.cutOff - light.outerCutOff;
+    float intensity = clamp((cosTheta - light.outerCutOff) / max(epsilon, 1e-6), 0.0, 1.0);
+
+    vec3 L = normalize(light.position - p);
+    float diff = max(dot(n, L), 0.0);
+    vec3 H = normalize(L + v);
+    float s = (diff > 0.0) ? pow(max(dot(n, H), 0.0), shininess) : 0.0;
+
+    float d = length(light.position - p);
+    float att = 1.0 / (light.constant + light.linear * d + light.quadratic * d * d);
+
+    vec3 ambient  = light.ambient * ambC * att * intensity;
+    vec3 diffuse  = light.diffuse * (diff * diffC) * att * intensity;
+    vec3 specular = light.specular * (s    * specC) * att * intensity;
+    return ambient + diffuse + specular;
+}
+
 vec4 diff;
 vec4 auxSpec;
 
@@ -172,42 +215,36 @@ void main() {
     }
 
     if (!uIsImportedModel) {
+        // ===== Original path (unchanged lighting) =====
         vec3 n = normalize(DataIn.normal);
-        vec3 viewDir = normalize(DataIn.eye); // eye-space view vector (from frag toward eye at origin)
+        vec3 viewDir = normalize(DataIn.eye);
         vec3 fragPos = DataIn.fragPos;
 
         vec3 result = vec3(0.0);
 
+        if (!night_mode) result += CalcDirLight(dirLight, n, viewDir);
 
-        // directional light
-        if (!night_mode && !is_Hud) result += CalcDirLight(dirLight, n, viewDir);
-
-        // point lights (use either numPointLights or 7)
         int pcount = (numPointLights > 0) ? numPointLights : 7;
         pcount = min(pcount, 7);
-        if (plight_mode && !is_Hud) {
+        if (plight_mode) {
             for (int i = 0; i < pcount; ++i) {
                 result += CalcPointLight(pointLights[i], n, fragPos, viewDir);
             }
         }
 
-        // spot lights (use either numSpotLights or 4)
         int scount = (numSpotLights > 0) ? numSpotLights : 4;
         scount = min(scount, 4);
-        if (headlights_mode && !is_Hud) {
+        if (headlights_mode) {
             for (int i = 0; i < scount; ++i) {
                 result += CalcSpotLight(spotLights[i], n, fragPos, viewDir);
             }
         }
 
-
         // Compose final color depending on texturing mode.
         if (texMode == 0) {
-            // no texturing: result already includes material ambient/diffuse/specular
             colorOut = vec4(clamp(result + mat.emissive.rgb, 0.0, 1.0), uAlpha);
         } else if (texMode == 1) {
             vec3 texel = texture(texmap, DataIn.tex_coord).rgb;
-            // modulate final lighting by texel (approximation of original behavior)
             vec3 outc = clamp(result * texel + 0.07 * texel, 0.0, 1.0);
             colorOut = vec4(outc, uAlpha);
         } else if (texMode == 2) {
@@ -222,93 +259,100 @@ void main() {
             vec3 texel = texture(texmap3, DataIn.tex_coord).rgb;
             vec3 outc = clamp(result * texel + 0.07 * texel, 0.0, 1.0);
             colorOut = vec4(outc, uAlpha);
-        } else if (texMode == 5) { // Used for Billboards
+        } else if (texMode == 5) { // Billboards
             vec4 texel = texture(texmap3, DataIn.tex_coord);
             vec3 outc = clamp(result * texel.rgb + 0.07 * texel.rgb, 0.0, 1.0);
-            if(texel.a < 0.40)     discard;
-            else    colorOut = vec4(outc, texel.a);
-        } else if (texMode == 6) { // Used for Particles
+            if (texel.a < 0.40) discard;
+            else colorOut = vec4(outc, texel.a);
+        } else if (texMode == 6) { // Particles
             vec4 texel = texture(texmap3, DataIn.tex_coord);
-            
-            if((texel.a < 0.20)  || (mat.diffuse.a == 0.0) ) discard;
-            else
-                colorOut = vec4(mat.diffuse.rgb, texel.a);
+            if ((texel.a < 0.20) || (mat.diffuse.a == 0.0)) discard;
+            else colorOut = vec4(mat.diffuse.rgb, texel.a);
         } else {
             vec2 tiledTC1 = DataIn.tex_coord * terrainTile1;
             vec2 tiledTC2 = DataIn.tex_coord * terrainTile2;
-            vec3 texel = texture(texmap2, tiledTC2).rgb;
+            vec3 texel  = texture(texmap2, tiledTC2).rgb;
             vec3 texel1 = texture(texmap1, tiledTC1).rgb;
             vec3 outc = clamp(result * texel * texel1 + 0.07 * texel * texel1, 0.0, 1.0);
             colorOut = vec4(outc, uAlpha);
         }
 
-        // Apply fog at the very end of main()
-        vec3 fogColor = vec3(0.35, 0.18, 0.08); // #5a2e14
-        float fogDensity = (fog_mode) ? 0.02f : 0.00f;
-        float dist = length(DataIn.eye);  // eye-space distance to camera
-        float fogFactor = exp(-pow(fogDensity * dist, 2.0));
-        fogFactor = clamp(fogFactor, 0.0, 1.0);
-
-        colorOut.rgb = mix(fogColor, colorOut.rgb, fogFactor);
-
+        // Fog
+        vec3 fogC = vec3(0.35, 0.18, 0.08);
+        float fDen = (fog_mode) ? 0.02 : 0.0;
+        float dist = length(DataIn.eye);
+        float fogFactor = clamp(exp(-pow(fDen * dist, 2.0)), 0.0, 1.0);
+        colorOut.rgb = mix(fogC, colorOut.rgb, fogFactor);
         return;
     } else {
-        // ===== Imported model path (fixed names/types) =====
-        vec4 spec = vec4(0.0);
-        vec3 n;
+        // ===== Imported model path (now using the SAME lights/toggles) =====
 
+        // ----- Normal (object or normal-mapped via TBN) -----
+        vec3 n;
         if (normalMap) {
-            // Normal from normal map (tangent space)
-            n = normalize(2.0 * texture(texUnitNormalMap, DataIn.tex_coord).rgb - 1.0);
+            // normal map in tangent space -> eye space using TBN
+            vec3 n_ts = 2.0 * texture(texUnitNormalMap, DataIn.tex_coord).rgb - 1.0;
+            n = normalize(DataIn.TBN * n_ts);
         } else {
             n = normalize(DataIn.normal);
         }
 
-        // In this path, lightDir & eye may be in tangent space already
-        vec3 l = normalize(DataIn.lightDir);
-        vec3 e = normalize(DataIn.eye);
+        vec3 v       = normalize(DataIn.eye);     // view dir (eye space)
+        vec3 p       = DataIn.fragPos;            // frag position (eye space)
 
-        float intensity = max(dot(n, l), 0.0);
+        // ----- Build material colors from imported textures -----
+        // Diffuse/albedo
+        vec3 albedo = mat.diffuse.rgb;
+        if (diffMapCount == 1u) {
+            albedo *= texture(texUnitDiff0, DataIn.tex_coord).rgb;
+        } else if (diffMapCount >= 2u) {
+            albedo *= texture(texUnitDiff0, DataIn.tex_coord).rgb
+                    * texture(texUnitDiff1, DataIn.tex_coord).rgb;
+        }
 
-        if (mat.texCount == 0) {
-            diff    = mat.diffuse;
-            auxSpec = mat.specular;
-        } 
-        else {
-            // Diffuse maps
-            if (diffMapCount == 0) {
-                diff = mat.diffuse;
-            } else if (diffMapCount == 1) {
-                diff = mat.diffuse * texture(texUnitDiff0, DataIn.tex_coord);
-            } else
-                diff = mat.diffuse * texture(texUnitDiff0, DataIn.tex_coord) * texture(texUnitDiff1, DataIn.tex_coord);
-        
-            if (specularMap) {
-                auxSpec = mat.specular * texture(texUnitSpec, DataIn.tex_coord);
-            } else {
-                auxSpec = mat.specular;
+        // Specular color (allow map to scale/tint spec highlights)
+        vec3 specC = mat.specular.rgb;
+        if (specularMap) {
+            specC *= texture(texUnitSpec, DataIn.tex_coord).rgb;
+        }
+
+        // Ambient color — usually albedo-tinted so dark areas don’t glow
+        vec3 ambC = mat.ambient.rgb * albedo;
+
+        float shin = mat.shininess;
+
+        // ----- Accumulate lights exactly like the other path -----
+        vec3 result = vec3(0.0);
+
+        if (!night_mode) {
+            result += CalcDirLight_M(dirLight, n, v, ambC, albedo, specC, shin);
+        }
+
+        int pcount = (numPointLights > 0) ? numPointLights : 7;
+        pcount = min(pcount, 7);
+        if (plight_mode) {
+            for (int i = 0; i < pcount; ++i) {
+                result += CalcPointLight_M(pointLights[i], n, p, v, ambC, albedo, specC, shin);
             }
         }
 
-        if (intensity > 0.0) {
-            vec3 h      = normalize(l + e);
-            float sdot  = max(dot(h, n), 0.0);
-            float sPow  = pow(sdot, mat.shininess);
-            spec        = auxSpec * sPow;
+        int scount = (numSpotLights > 0) ? numSpotLights : 4;
+        scount = min(scount, 4);
+        if (headlights_mode) {
+            for (int i = 0; i < scount; ++i) {
+                result += CalcSpotLight_M(spotLights[i], n, p, v, ambC, albedo, specC, shin);
+            }
         }
 
+        // Emissive and output
+        vec3 finalRGB = clamp(result + mat.emissive.rgb, 0.0, 1.0);
+        colorOut = vec4(finalRGB, uAlpha);
 
-        colorOut  =  vec4((max(intensity * diff, diff*0.15) + spec).rgb, 1.0);
-
-        vec3 fogColor = vec3(0.35, 0.18, 0.08); // #5a2e14
-        float fogDensity = (fog_mode) ? 0.01f : 0.00f;
-        float dist = length(DataIn.eye);  // eye-space distance to camera
-        float fogFactor = exp(-pow(fogDensity * dist, 2.0));
-        fogFactor = clamp(fogFactor, 0.0, 1.0);
-
-        colorOut.rgb = mix(fogColor, colorOut.rgb, fogFactor);
-
-
+        // Fog (same treatment)
+        vec3 fogC = vec3(0.35, 0.18, 0.08);
+        float fDen = (fog_mode) ? 0.02 : 0.0;
+        float dist = length(DataIn.eye);
+        float fogFactor = clamp(exp(-pow(fDen * dist, 2.0)), 0.0, 1.0);
+        colorOut.rgb = mix(fogC, colorOut.rgb, fogFactor);
     }
 }
-

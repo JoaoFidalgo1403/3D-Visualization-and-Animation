@@ -1826,17 +1826,27 @@ void renderSim(void) {
 				data.pvm    = mu.get(gmu::PROJ_VIEW_MODEL);
 				data.normal = mu.getNormalMatrix();
 
-				// highlight package source/destination: tint first tower mesh
-				float savedDiffuse[4] = {0,0,0,0};
+				// highlight package source/destination: bump EMISSIVE (Ke) on the first tower mesh
+				float savedEmissive[4] = {0,0,0,0};
 				bool  changed = false;
+
 				if (currentPackage.active) {
-					bool isSrc = (!currentPackage.pickedUp && i == currentPackage.src_i && j == currentPackage.src_j);
-					bool isDst = ( currentPackage.pickedUp && i == currentPackage.dst_i && j == currentPackage.dst_j);
+					const bool isSrc = (!currentPackage.pickedUp && i == currentPackage.src_i && j == currentPackage.src_j);
+					const bool isDst = ( currentPackage.pickedUp && i == currentPackage.dst_i && j == currentPackage.dst_j);
+
 					if (isSrc || isDst) {
 						if (!renderer.towerMeshes.empty()) {
-							memcpy(savedDiffuse, renderer.towerMeshes[0].mat.diffuse, sizeof(savedDiffuse));
-							float col[4] = { isSrc ? 0.2f : 1.0f, isSrc ? 1.0f : 0.2f, 0.2f, 1.0f };
-							memcpy(renderer.towerMeshes[0].mat.diffuse, col, sizeof(col));
+							// save old emissive (Ke)
+							memcpy(savedEmissive, renderer.towerMeshes[0].mat.emissive, sizeof(savedEmissive));
+
+							// set Ke to RED for source, GREEN for destination
+							const float col[4] = {
+								isSrc ? 0.0f : 1.0f,  // R
+								isSrc ? 1.0f : 0.0f,  // G
+								0.0f,                 // B
+								1.0f                  // A (unused in our shader, but keep 1)
+							};
+							memcpy(renderer.towerMeshes[0].mat.emissive, col, sizeof(col));
 							changed = true;
 						}
 					}
@@ -1847,8 +1857,9 @@ void renderSim(void) {
 				renderer.setIsModel(false);
 
 				if (changed) {
-					memcpy(renderer.towerMeshes[0].mat.diffuse, savedDiffuse, sizeof(savedDiffuse));
+					memcpy(renderer.towerMeshes[0].mat.emissive, savedEmissive, sizeof(savedEmissive));
 				}
+
 			}
 
 			mu.popMatrix(gmu::MODEL);
