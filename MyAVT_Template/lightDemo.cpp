@@ -47,6 +47,18 @@
 
 #include <random>
 
+// --- Force high-performance dGPU on hybrid/Optimus systems (Windows) ---
+#if defined(_WIN32)
+// Avoid <windows.h> by using standard types
+extern "C" {
+// Prefer NVIDIA dGPU when available
+__declspec(dllexport) unsigned long NvOptimusEnablement = 0x00000001;
+// Prefer AMD dGPU when available (harmless on NVIDIA boxes)
+__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+}
+#endif
+
+
 using namespace std;
 
 #define frand()			((float)rand()/RAND_MAX)
@@ -2436,8 +2448,6 @@ int main(int argc, char **argv) {
 	glutInitWindowPosition(100,100);
 	glutInitWindowSize(WinX, WinY);
 	WindowHandle = glutCreateWindow(CAPTION);
-
-
 
 //  Callback Registration
 	glutDisplayFunc(renderSim);
