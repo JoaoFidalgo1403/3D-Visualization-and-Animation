@@ -182,6 +182,8 @@ const float PI = 3.14159265f;
 // --- Camera parameters ---
 
 // Camera Position
+const float DEG2RAD = 3.14159265f / 180.0f;
+const float RAD2DEG = 180.0f / 3.14159265f;
 float camX, camY, camZ;
 
 // Camera Spherical Coordinates
@@ -604,7 +606,7 @@ void applyBatteryLoss(float amountFraction, BatteryLossReason reason) {
     // print human friendly data: amount in percent and remaining battery
     int amtPct = (int)roundf(amountFraction * 100.0f);
     int remaining = (int)roundf(batteryLevel * 100.0f);
-    printf("[BATTERY] -%d%% (%s) -> remaining %d%%\n", amtPct, reasonToStr(reason), remaining);
+    //printf("[BATTERY] -%d%% (%s) -> remaining %d%%\n", amtPct, reasonToStr(reason), remaining);
     fflush(stdout);
 
     if (batteryLevel <= 0.0f) {
@@ -633,10 +635,6 @@ void updateBatteryAndDistance(float dt) {
     prevDronePos[1] = drone.pos[1];
     prevDronePos[2] = drone.pos[2];
 
-    // check battery empty
-    if (batteryLevel <= 0.0f) {
-        triggerGameOver();
-    }
 }
 
 // -----------------------------------------------------------
@@ -746,20 +744,6 @@ void updateBirds(float dt) {
 			b.rotSpeed = d.rotSpeed;
 		}
 
-		// Calculate collision
-		float dist_x = CITY_CENTER[0] - b.pos[0];
-		float dist_y = CITY_CENTER[1] - b.pos[1];
-		float dist_z = CITY_CENTER[2] - b.pos[2];
-		if (std::sqrt(dist_x*dist_x + dist_y*dist_y + dist_z*dist_z) <= 1.0f) {
-			// apply battery penalty for hitting a bird and give a small bounce effect
-			if (collisionInvulnTimer <= 0.0f) {
-        		applyBatteryLoss(COLLISION_BATTERY_PENALTY, LOSS_BIRD);
-        		collisionInvulnTimer = COLLISION_INVULN_DURATION;
-				drone.collisionVel[1] = - drone.velocity[1] * 1.5f;
-				if (batteryLevel <= 0.0f) triggerGameOver();
-			}
-		}
-
     }
 }
 
@@ -807,6 +791,47 @@ AABB computeBuildingAABB(int i, int j) {
     return box;
 }
 
+// Tune these to match your bird model size at runtime.
+// Start generous; tighten after a quick visual test.
+static const float BIRD_HALF_WIDTH  = 0.35f;
+static const float BIRD_HEIGHT = 0.35f;
+static const float BIRD_FDEPTH = 0.2f;
+static const float BIRD_BDEPTH = 2.7f;
+
+AABB computeBirdAABB(const Bird& b) {
+	{
+		const float hx = BIRD_HALF_WIDTH;
+		const float hy = BIRD_HEIGHT * 0.5f;
+		const float hz = 0.5f * (BIRD_FDEPTH + BIRD_BDEPTH);
+
+		const float yaw = b.rotation * DEG2RAD;         // radians; update each frame from rotSpeed
+		const float c  = cosf(yaw);
+		const float s  = sinf(yaw);
+
+		// local center offset rotated by yaw
+		const float cLocalX = 0.0f;
+		const float cLocalY = hy;
+		const float cLocalZ = 0.5f*(BIRD_FDEPTH - BIRD_BDEPTH);
+
+		const float cx = b.pos[0] + c*cLocalX + 0.0f + (-s)*cLocalZ;
+		const float cy = b.pos[1] + cLocalY;
+		const float cz = b.pos[2] + s*cLocalX + 0.0f +  c *cLocalZ;
+
+		// extents after yaw: rows of R_yaw are [ c 0 -s ], [0 1 0], [ s 0  c ]
+		const float ex = fabsf(c)*hx + 0.0f*hy + fabsf(-s)*hz;
+		const float ey = hy;
+		const float ez = fabsf(s)*hx + 0.0f*hy + fabsf(c)*hz;
+
+		AABB box;
+		box.minX = cx - ex; box.maxX = cx + ex;
+		box.minY = cy - ey; box.maxY = cy + ey;
+		box.minZ = cz - ez; box.maxZ = cz + ez;
+		return box;
+}
+
+}
+
+
 
 bool checkCollision(const AABB &a, const AABB &b) {
     return (a.minX <= b.maxX && a.maxX >= b.minX) &&
@@ -841,7 +866,6 @@ void handleCollisions() {
 		if (collisionInvulnTimer <= 0.0f) {
 			applyBatteryLoss(COLLISION_BATTERY_PENALTY, LOSS_GROUND);
 			collisionInvulnTimer = COLLISION_INVULN_DURATION;
-			if (batteryLevel <= 0.0f) triggerGameOver();
 		}
 		return;
 	}
@@ -870,8 +894,67 @@ void handleCollisions() {
 				if (collisionInvulnTimer <= 0.0f) {
 					applyBatteryLoss(COLLISION_BATTERY_PENALTY, LOSS_BUILDING);
 					collisionInvulnTimer = COLLISION_INVULN_DURATION;
-					if (batteryLevel <= 0.0f) triggerGameOver();
 				}
+			}
+		}
+	}
+
+	if (!hasCollided) {
+		for (auto &b : birds) {
+			AABB birdBox = computeBirdAABB(b);
+			if (checkCollision(droneBox, birdBox)) {
+				std::cout << "Collision with bird\n";
+
+				// Centers (using AABBs so we don't care where the bird's origin is)
+				const float droneCx = 0.5f * (droneBox.minX + droneBox.maxX);
+				const float droneCy = 0.5f * (droneBox.minY + droneBox.maxY);
+				const float droneCz = 0.5f * (droneBox.minZ + droneBox.maxZ);
+
+				const float birdCx  = 0.5f * (birdBox .minX + birdBox .maxX);
+				const float birdCy  = 0.5f * (birdBox .minY + birdBox .maxY);
+				const float birdCz  = 0.5f * (birdBox .minZ + birdBox .maxZ);
+
+				// Penetration depths along each axis (we already know they overlap)
+				const float overlapX = std::min(droneBox.maxX, birdBox.maxX) - std::max(droneBox.minX, birdBox.minX);
+				const float overlapY = std::min(droneBox.maxY, birdBox.maxY) - std::max(droneBox.minY, birdBox.minY);
+				const float overlapZ = std::min(droneBox.maxZ, birdBox.maxZ) - std::max(droneBox.minZ, birdBox.minZ);
+
+				// Resolve along the axis of MINIMUM penetration (MTV)
+				int axis = 0; // 0=X, 1=Y, 2=Z
+				float minOverlap = overlapX;
+				if (overlapY < minOverlap) { axis = 1; minOverlap = overlapY; }
+				if (overlapZ < minOverlap) { axis = 2; /* minOverlap = overlapZ; */ }
+
+				// Normal direction from bird to drone on that axis
+				float normal[3] = {0.f, 0.f, 0.f};
+				if (axis == 0) normal[0] = (droneCx < birdCx) ? -1.f : 1.f;
+				else if (axis == 1) normal[1] = (droneCy < birdCy) ? -1.f : 1.f;
+				else                 normal[2] = (droneCz < birdCz) ? -1.f : 1.f;
+
+				// Optional: positional depenetration (nudge drone out so it doesn't stick)
+				// (Assumes you can directly move the drone's position.)
+				const float sep = minOverlap + 0.001f; // small slop
+				drone.pos[0] += normal[0] * sep;
+				drone.pos[1] += normal[1] * sep;
+				drone.pos[2] += normal[2] * sep;
+
+				// Reflect velocity component along that axis & add a bit of bounce
+				const float bounce = 1.6f;
+				drone.collisionVel[0] = drone.velocity[0];
+				drone.collisionVel[1] = drone.velocity[1];
+				drone.collisionVel[2] = drone.velocity[2];
+
+				if (axis == 0)      drone.collisionVel[0] = -drone.velocity[0] * bounce;
+				else if (axis == 1) drone.collisionVel[1] = -drone.velocity[1] * bounce;
+				else                drone.collisionVel[2] = -drone.velocity[2] * bounce;
+
+				if (collisionInvulnTimer <= 0.0f) {
+					applyBatteryLoss(COLLISION_BATTERY_PENALTY, LOSS_BIRD);
+					collisionInvulnTimer = COLLISION_INVULN_DURATION;
+				}
+
+				hasCollided = true;
+				break;
 			}
 		}
 	}
@@ -1408,8 +1491,10 @@ void drawBirds(dataMesh& data) {
 
 		} 
 		mu.popMatrix(gmu::MODEL);
+
 	}
 }
+
 
 
 void drawDrone(dataMesh &data) {
@@ -1570,7 +1655,6 @@ void renderSim(void) {
 		case THIRD:
 			{
 				// smoothing yaw with shortest-path angular interpolation
-				const float DEG2RAD = 3.14159265f / 180.0f;
 				static float smoothYaw = 0.0f; // persistent across frames
 				const float smoothFactor = 0.08f; // your previous value
 
@@ -1933,7 +2017,7 @@ void renderSim(void) {
 	checkPackagePickupAndDelivery();
 
 	// Draw objects in correct order and ensure model matrix is reset for each
-
+	
 	drawBirds(data);  // Background elements first
 	drawPackage(data);  // Then package 
 	drawDrone(data);  // Draw drone last so it's on top
@@ -2071,7 +2155,6 @@ void renderSim(void) {
 	// (Optional: compute camera world pos depending on cameraMode — here is a simple approximation)
 	float camWX=0.f, camWY=0.f, camWZ=0.f;
 	if (cameraMode == THIRD) {
-		const float DEG2RAD = 3.14159265f / 180.0f;
 		float yawRad = drone.yaw * DEG2RAD;
 		// use camOrbitAngle / camOrbitRadius from your code
 		float finalAngle = camOrbitAngle - (camOrbitFollowYaw ? yawRad : 0.0f);
