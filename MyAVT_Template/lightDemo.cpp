@@ -262,11 +262,16 @@ struct Package {
 const float CITY_CENTER[3] = {35.0f, 0.0f, 35.0f};
 
 // Buildings Scale
+
 // --- Per-cell floating params for towers (visual + later physics) ---
 static float gTowerBaseOffset[6][6];  // static vertical offset per cell (makes towers start at different heights)
 static float gTowerFloatAmp[6][6];    // bob amplitude per cell
 static float gTowerFloatPhase[6][6];  // random phase per cell
 static float gTowerFloatSpeed[6][6];  // bob speed (rad/s) per cell
+
+const float gTowerFitScale = 2.3f; // your current scale
+static float gTowerMinY = 0.0f;
+static float gTowerMaxY = 50.0f;
 
 const float BUILDING_WIDTH = 10.0f;
 const float BUILDING_DEPTH = 10.0f;
@@ -414,6 +419,16 @@ void updateParticles()
 // Package Handling
 //
 
+inline float towerTopY_fixed50(int i, int j) {
+    const float t = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+    const float yBob = gTowerBaseOffset[i][j]
+                     + std::sin(t * gTowerFloatSpeed[i][j] + gTowerFloatPhase[i][j])
+                     * gTowerFloatAmp[i][j];
+
+    const float baseY = 25.0f + yBob; // same baseline as render/AABB
+    return baseY + 25.0f; // fixed height: [-25,+25] → top = center + 25
+}
+
 // check whether building (i,j) is valid for package placement
 static bool isValidBuildingCell(int i, int j) {
     if (i < 0 || i >= 6 || j < 0 || j >= 6) return false;
@@ -430,7 +445,7 @@ static void buildingRoofCenter(int i, int j, float out[3]) {
     float z = -20.0f + j * 20.0f;
     out[0] = x + BUILDING_WIDTH * 0.5f;
     out[2] = z + BUILDING_DEPTH * 0.5f;
-    out[1] = cubeHeights[i][j]; // top of roof
+    out[1] = towerTopY_fixed50(i, j) + 2.0f; // top of roof
 }
 
 void spawnPackage() {
@@ -758,6 +773,7 @@ void updateBirds(float dt) {
 // Collision Detection
 //
 
+
 AABB computeDroneAABB() {
     AABB box;
     float halfWidth = DRONE_WIDTH / 2.0f + 0.1f;
@@ -774,23 +790,36 @@ AABB computeDroneAABB() {
     return box;
 }
 
+// Per-tower bob (same math as draw)
+static inline float towerBob(int i, int j) {
+    const float t = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+    return gTowerBaseOffset[i][j]
+         + std::sin(t * gTowerFloatSpeed[i][j] + gTowerFloatPhase[i][j])
+         * gTowerFloatAmp[i][j];
+}
+
+// AABB follows tower float; model local Y is [-25, +25] → 50 tall
 AABB computeBuildingAABB(int i, int j) {
     AABB box;
-    float width = 10.0f;
-    float depth = 10.0f;
-    float height = cubeHeights[i][j];
 
-    float x = -20.0f + i * 20.0f;
-    float z = -20.0f + j * 20.0f;
+    // XZ footprint (centered 10x10 at each cell)
+    const float cx = -20.0f + i * 20.0f + BUILDING_WIDTH  * 0.5f; // BUILDING_WIDTH = 10
+    const float cz = -20.0f + j * 20.0f + BUILDING_DEPTH  * 0.5f; // BUILDING_DEPTH = 10
+    const float halfW = BUILDING_WIDTH  * 0.5f; // 5
+    const float halfD = BUILDING_DEPTH  * 0.5f; // 5
+    box.minX = cx - halfW; box.maxX = cx + halfW;
+    box.minZ = cz - halfD; box.maxZ = cz + halfD;
 
-    box.minX = x;
-    box.maxX = x + width;
-    box.minY = 0.0f;
-    box.maxY = height;
-    box.minZ = z;
-    box.maxZ = z + depth;
+    // Y: center at 25 + yBob (so bottom = 0 + yBob, top = 50 + yBob)
+    const float yBob  = towerBob(i, j);
+    const float centerY = 25.0f + yBob;
+
+    box.minY = centerY - 25.0f; // = 0 + yBob
+    box.maxY = centerY + 25.0f; // = 50 + yBob
+
     return box;
 }
+
 
 bool checkCollision(const AABB &a, const AABB &b) {
     return (a.minX <= b.maxX && a.maxX >= b.minX) &&
@@ -1798,17 +1827,14 @@ void renderSim(void) {
 				std::sin(tSeconds * gTowerFloatSpeed[i][j] + gTowerFloatPhase[i][j]) *
 				gTowerFloatAmp[i][j];
 
-			const float worldY = 20.0f + yBob;  // your previous baseline (20) + float offset
+			const float worldY = 25.0f + yBob;  // your previous baseline (20) + float offset
 
 			mu.translate(gmu::MODEL, worldX, worldY, worldZ);
 
 			if (renderer.droneMeshes.size() > 0 && towerScene != nullptr) {
 
-				const float TOWER_FIT_SCALE = 2.0f; // your current scale
-				mu.scale(gmu::MODEL, TOWER_FIT_SCALE, TOWER_FIT_SCALE, TOWER_FIT_SCALE);
+				mu.scale(gmu::MODEL, gTowerFitScale, gTowerFitScale, gTowerFitScale);
 
-				// Optional: rotate to align fronts
-				// mu.rotate(gmu::MODEL, 180.0f, 0, 1, 0);
 
 				mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
 				mu.computeNormalMatrix3x3();
