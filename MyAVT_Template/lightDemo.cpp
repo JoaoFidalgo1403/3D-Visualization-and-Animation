@@ -366,6 +366,7 @@ void initParticles(void)
 	for (int i = 0; i<MAX_PARTICLES; i++)
 	{
 		initParticle_singular(particle[i]);
+		particle[i].life = -1.0f; /* dead particle */
 	}
 }
 
