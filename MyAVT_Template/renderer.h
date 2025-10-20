@@ -113,10 +113,10 @@ public:
   //Vector with meshes
   std::vector<struct MyMesh> myMeshes;
   std::vector<struct MyMesh> droneMeshes;
+  std::vector<struct MyMesh> towerMeshes;
 
   /// Object of class Texture that manage an array of Texture Objects
   Texture TexObjArray;
-  Texture TexObjArrayDrone;
 
 private:
 

@@ -232,7 +232,7 @@ void main() {
             
             if((texel.a < 0.20)  || (mat.diffuse.a == 0.0) ) discard;
             else
-                colorOut = vec4(0.8 * mat.diffuse.rgb + 0.2 * texel.rgb, texel.a);
+                colorOut = vec4(mat.diffuse.rgb, texel.a);
         } else {
             vec2 tiledTC1 = DataIn.tex_coord * terrainTile1;
             vec2 tiledTC2 = DataIn.tex_coord * terrainTile2;
@@ -297,15 +297,18 @@ void main() {
             spec        = auxSpec * sPow;
         }
 
+
         colorOut  =  vec4((max(intensity * diff, diff*0.15) + spec).rgb, 1.0);
 
-        // Optional: apply same fog to imported path for consistency
-        //if (fog_mode) {
-        //   float dist      = length(DataIn.eye);
-        //    float fogFactor = exp(-pow(fogDensity * dist, 2.0));
-        //    fogFactor       = clamp(fogFactor, 0.0, 1.0);
-        //    col.rgb         = mix(fogColor, col.rgb, fogFactor);
-        //}
+        vec3 fogColor = vec3(0.35, 0.18, 0.08); // #5a2e14
+        float fogDensity = (fog_mode) ? 0.02f : 0.00f;
+        float dist = length(DataIn.eye);  // eye-space distance to camera
+        float fogFactor = exp(-pow(fogDensity * dist, 2.0));
+        fogFactor = clamp(fogFactor, 0.0, 1.0);
+
+        colorOut.rgb = mix(fogColor, colorOut.rgb, fogFactor);
+
+
     }
 }
 
