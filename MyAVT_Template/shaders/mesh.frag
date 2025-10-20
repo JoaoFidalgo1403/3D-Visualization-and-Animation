@@ -301,7 +301,7 @@ void main() {
         colorOut  =  vec4((max(intensity * diff, diff*0.15) + spec).rgb, 1.0);
 
         vec3 fogColor = vec3(0.35, 0.18, 0.08); // #5a2e14
-        float fogDensity = (fog_mode) ? 0.02f : 0.00f;
+        float fogDensity = (fog_mode) ? 0.01f : 0.00f;
         float dist = length(DataIn.eye);  // eye-space distance to camera
         float fogFactor = exp(-pow(fogDensity * dist, 2.0));
         fogFactor = clamp(fogFactor, 0.0, 1.0);

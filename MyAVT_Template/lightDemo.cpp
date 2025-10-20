@@ -257,8 +257,9 @@ struct Package {
     bool pickedUp = false;    // is it currently attached to the drone?
     int src_i = -1, src_j = -1;
     int dst_i = -1, dst_j = -1;
-	float localPos[3]; // local position relative to drone when attached
-    float pos[3];             // world coords of package (when on roof or attached)
+	float dronePos[3] = {-0.2f, -0.4f, -0.2f}; // local offset relative to drone when picked up
+    float towerPos[3] = {-0.5f, 3.0f, -0.5f}; // world position on tower roof
+	float worldPos[3] = {0.f, 0.f, 0.f}; // current world position (updated when attached)
 } currentPackage;
 
 
@@ -274,8 +275,6 @@ static float gTowerFloatPhase[6][6];  // random phase per cell
 static float gTowerFloatSpeed[6][6];  // bob speed (rad/s) per cell
 
 const float gTowerFitScale = 2.3f; // your current scale
-static float gTowerMinY = 0.0f;
-static float gTowerMaxY = 50.0f;
 
 const float BUILDING_WIDTH = 10.0f;
 const float BUILDING_DEPTH = 10.0f;
@@ -421,12 +420,14 @@ void updateParticles(float dt, float color)
 		particle[i].life -= particle[i].fade * dt;
 	}
 }
+// :::::::::::::::::::::::::::::::::::::::::::::::: PACKAGE HANDLING :::::::::::::::::::::::::::::::::::::::::::::::::://///
+static inline float towerBob(int i, int j) {
+    const float t = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+    return gTowerBaseOffset[i][j]
+         + std::sin(t * gTowerFloatSpeed[i][j] + gTowerFloatPhase[i][j])
+         * gTowerFloatAmp[i][j];
+}
 
-
-// -----------------------------------------------------------
-//
-// Package Handling
-//
 
 inline float towerTopY_fixed50(int i, int j) {
     const float t = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
@@ -446,15 +447,6 @@ static bool isValidBuildingCell(int i, int j) {
     // skip special blocked cell (your code already skipped these)
     if ((i == 1 || i == 2) && j == 1) return false;
     return true;
-}
-
-// get world coords for building roof center
-static void buildingRoofCenter(int i, int j, float out[3]) {
-    float x = -20.0f + i * 20.0f;
-    float z = -20.0f + j * 20.0f;
-    out[0] = x + BUILDING_WIDTH * 0.5f;
-    out[2] = z + BUILDING_DEPTH * 0.5f;
-    out[1] = towerTopY_fixed50(i, j) + 2.0f; // top of roof
 }
 
 void spawnPackage() {
@@ -481,82 +473,55 @@ void spawnPackage() {
     currentPackage.pickedUp = false;
     currentPackage.src_i = s_i; currentPackage.src_j = s_j;
     currentPackage.dst_i = d_i; currentPackage.dst_j = d_j;
-
-    float center[3];
-    buildingRoofCenter(s_i, s_j, center);
-    currentPackage.pos[0] = center[0];
-    currentPackage.pos[2] = center[2];
-    currentPackage.pos[1] = center[1] + 2.0f; // a little above roof
-
-	// default local offset relative to drone when picked up (drone-local coords)
-    currentPackage.localPos[0] = - 0.2f;
-    currentPackage.localPos[1] = -0.4f;
-    currentPackage.localPos[2] = - 0.2f; 
-
-    printf("[PACKAGE] spawned at (%d,%d) -> dest (%d,%d) at (%.1f, %.1f, %.1f)\n",
-           s_i, s_j, d_i, d_j,
-           currentPackage.pos[0], currentPackage.pos[1], currentPackage.pos[2]);
 }
 
 void checkPackagePickupAndDelivery() {
-    if (!currentPackage.active) return;
-	// if not picked up: check drone proximity to package (package is static on roof)
-    if (!currentPackage.pickedUp) {
-        float dx = drone.pos[0] - currentPackage.pos[0];
-        float dy = drone.pos[1] - currentPackage.pos[1];
-        float dz = drone.pos[2] - currentPackage.pos[2];
-        float dist = sqrtf(dx*dx + dy*dy + dz*dz);
-        const float pickupRadius = 2.0f; // tweak
-        if (dist <= pickupRadius && !isGameOver) {
-            currentPackage.pickedUp = true;
-       
-            printf("[PACKAGE] picked up (attached, localOffset = %.2f, %.2f, %.2f)\n",
-                   currentPackage.localPos[0], currentPackage.localPos[1], currentPackage.localPos[2]);
-        }
-    } else {
-        // package is attached: compute its world position from drone MODEL transform
-        float local4[4] = { currentPackage.localPos[0], currentPackage.localPos[1], currentPackage.localPos[2], 1.0f };
-        float world4[4];
-        mu.pushMatrix(gmu::MODEL);
-        mu.translate(gmu::MODEL, drone.pos[0], drone.pos[1], drone.pos[2]);
-        mu.rotate(gmu::MODEL, drone.yaw, 0, 1, 0);
-        mu.rotate(gmu::MODEL, drone.pitch, 0, 0, 1);
-        mu.rotate(gmu::MODEL, drone.roll, 1, 0, 0);
-        mu.multMatrixPoint(gmu::MODEL, local4, world4); // MODEL -> world
-        mu.popMatrix(gmu::MODEL);
+	if (!currentPackage.active) return;
 
-        // update stored world position (so draw/other code can use it)
-        currentPackage.pos[0] = world4[0];
-        currentPackage.pos[1] = world4[1];
-        currentPackage.pos[2] = world4[2];
+	// --- PICKUP ---
+	if (!currentPackage.pickedUp) {
+		float dx = drone.pos[0] - currentPackage.worldPos[0];
+		float dy = drone.pos[1] - currentPackage.worldPos[1];
+		float dz = drone.pos[2] - currentPackage.worldPos[2];
+		float dist = sqrtf(dx * dx + dy * dy + dz * dz);
 
-        // check delivery proximity to destination roof center using the computed world pos
-        float dstCenter[3];
-        buildingRoofCenter(currentPackage.dst_i, currentPackage.dst_j, dstCenter);
-        // measure horizontal distance and vertical closeness - allow some tolerance
-        float dx = currentPackage.pos[0] - dstCenter[0];
-        float dz = currentPackage.pos[2] - dstCenter[2];
-        float dy = currentPackage.pos[1] - (dstCenter[1] + 1.0f); // package target just above roof
-        float horizDist = sqrtf(dx*dx + dz*dz);
-        const float deliverHorizRadius = 2.5f;
-        const float deliverVertTol = 3.0f; // allow delivering from above within this vertical tolerance
+		const float pickupRadius = 2.0f;
+		if (dist <= pickupRadius && !isGameOver) {
+			currentPackage.pickedUp = true;
+			printf("[PACKAGE] picked up\n");
+		}
+	}
+	// --- DELIVERY ---
+	else {
+		float dstX = -20.0f + currentPackage.dst_i * 20.0f + BUILDING_DEPTH / 2.0f;
+		float dstZ = -20.0f + currentPackage.dst_j * 20.0f + BUILDING_WIDTH / 2.0f;
+		float dstY = towerBob(currentPackage.dst_i, currentPackage.dst_j) + 40.0f;
 
-        if (horizDist <= deliverHorizRadius && fabsf(drone.pos[1] - dstCenter[1]) <= deliverVertTol) {
-            // delivered!
-            int gained = (int)roundf(batteryLevel * 100.0f); // points proportional to remaining battery
-            scorePoints += gained;
-            batteryLevel = 1.0f; // refill battery on delivery
+		float dx = currentPackage.worldPos[0] - dstX;
+		float dz = currentPackage.worldPos[2] - dstZ;
+		float horizDist = sqrtf(dx * dx + dz * dz);
+
+		const float deliverHorizRadius = 2.5f;
+		const float deliverVertTol = 3.0f;
+		if (horizDist <= deliverHorizRadius &&
+			fabsf(currentPackage.worldPos[1] - (dstY + 1.0f)) <= deliverVertTol)
+		{
+			int gained = (int)roundf(batteryLevel * 100.0f);
+			scorePoints += gained;
+			batteryLevel = 1.0f;
 			smoke_toggle = false;
-            printf("[PACKAGE] delivered to (%d,%d). +%d points. Battery refilled.\n",
-                   currentPackage.dst_i, currentPackage.dst_j, gained);
 
-            // spawn a new package immediately
-            currentPackage.active = false;
-            currentPackage.pickedUp = false;
-            spawnPackage();
-        }
-    }
+			printf("[PACKAGE] delivered to (%d,%d). +%d points. Battery refilled.\n",
+				currentPackage.dst_i, currentPackage.dst_j, gained);
+
+			currentPackage.active = false;
+			currentPackage.pickedUp = false;
+			spawnPackage();
+		}
+	}
 }
+
+
 
 
 // ------------------------------------------------------------
@@ -801,14 +766,6 @@ AABB computeDroneAABB() {
     return box;
 }
 
-// Per-tower bob (same math as draw)
-static inline float towerBob(int i, int j) {
-    const float t = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
-    return gTowerBaseOffset[i][j]
-         + std::sin(t * gTowerFloatSpeed[i][j] + gTowerFloatPhase[i][j])
-         * gTowerFloatAmp[i][j];
-}
-
 // AABB follows tower float; model local Y is [-25, +25] → 50 tall
 AABB computeBuildingAABB(int i, int j) {
     AABB box;
@@ -825,8 +782,8 @@ AABB computeBuildingAABB(int i, int j) {
     const float yBob  = towerBob(i, j);
     const float centerY = 25.0f + yBob;
 
-    box.minY = centerY - 25.0f; // = 0 + yBob
-    box.maxY = centerY + 25.0f; // = 50 + yBob
+    box.minY = centerY - 17.5f; // = 0 + yBob
+    box.maxY = centerY + 15.0f; // = 50 + yBob
 
     return box;
 }
@@ -1341,10 +1298,6 @@ void aiRecursive_render(const aiNode* nd,
     mu.popMatrix(gmu::MODEL);
 }
 
-
-
-
-
 void drawPackage(dataMesh &data) {
     if (!currentPackage.active) return;
 
@@ -1356,9 +1309,26 @@ void drawPackage(dataMesh &data) {
         mu.rotate(gmu::MODEL, drone.pitch, 0, 0, 1);
         mu.rotate(gmu::MODEL, drone.roll,  1, 0, 0);
         // local offset where package is attached (drone-local)
-        mu.translate(gmu::MODEL, currentPackage.localPos[0], currentPackage.localPos[1], currentPackage.localPos[2]);
+        mu.translate(gmu::MODEL, currentPackage.dronePos[0], currentPackage.dronePos[1], currentPackage.dronePos[2]);
+
+		// calculate world position (just transform local offset)
+        float local4[4] = {0, 0, 0, 1};
+        float world4[4];
+        mu.multMatrixPoint(gmu::MODEL, local4, world4);
+        currentPackage.worldPos[0] = world4[0];
+        currentPackage.worldPos[1] = world4[1];
+        currentPackage.worldPos[2] = world4[2];
     } else {
-        mu.translate(gmu::MODEL, currentPackage.pos[0], currentPackage.pos[1], currentPackage.pos[2]);
+		float towerPosX = -20.0f + currentPackage.src_i * 20.0f + BUILDING_DEPTH / 2.0f;
+		float towerPosZ = -20.0f + currentPackage.src_j * 20.0f + BUILDING_WIDTH  / 2.0f;
+		float towerPosY = towerBob(currentPackage.src_i, currentPackage.src_j) + 40.0f;
+		mu.translate(gmu::MODEL, towerPosX, towerPosY, towerPosZ);
+        mu.translate(gmu::MODEL, currentPackage.towerPos[0], currentPackage.towerPos[1], currentPackage.towerPos[2]);
+
+		// store world position
+        currentPackage.worldPos[0] = towerPosX + currentPackage.towerPos[0];
+        currentPackage.worldPos[1] = towerPosY + currentPackage.towerPos[1];
+        currentPackage.worldPos[2] = towerPosZ + currentPackage.towerPos[2];
     }
     mu.scale(gmu::MODEL, 0.4f, 0.4f, 0.4f); // package size
     mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
