@@ -116,6 +116,7 @@ public:
   std::vector<struct MyMesh> droneMeshes;
   std::vector<struct MyMesh> towerMeshes;
   std::vector<struct MyMesh> packageMeshes;
+  std::vector<struct MyMesh> birdMeshes;
 
   /// Object of class Texture that manage an array of Texture Objects
   Texture TexObjArray;

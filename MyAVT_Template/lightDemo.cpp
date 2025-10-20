@@ -75,21 +75,25 @@ bool isPaused = false;
 Assimp::Importer droneImporter;
 Assimp::Importer towerImporter;
 Assimp::Importer packageImporter;
+Assimp::Importer birdImporter;
 
 // the global Assimp scene object
 const aiScene* droneScene;
 const aiScene* towerScene;
 const aiScene* packageScene;
+const aiScene* birdScene;
 
 // scale factor for the Assimp model to fit in the window
 float droneImportedScale;
 float towerImportedScale;
 float packageImportedScale;
+float birdImportedScale;
 
 // --- Model Data ---
 GLuint* droneTextureIds;       
 GLuint* towerTextureIds;
 GLuint* packageTextureIds;
+GLuint* birdTextureIds;
 
 
 char model_dir[50];  //initialized by the user input at the console
@@ -1383,22 +1387,28 @@ void drawPackage(dataMesh &data) {
 
 
 void drawBirds(dataMesh& data) {
-    data.meshID = 0; // Sphere mesh
+	
     for (const auto& b : birds) {
-        mu.pushMatrix(gmu::MODEL);
-        mu.translate(gmu::MODEL, b.pos[0], b.pos[1], b.pos[2]);
-        mu.rotate(gmu::MODEL, b.rotation, 0, 1, 0); // Rotate around Y axis
-        mu.scale(gmu::MODEL, 1.0f, 0.5f, 1.0f); // Sphere size
-        mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
-        mu.computeNormalMatrix3x3();
-        data.texMode = 0;
-        data.vm = mu.get(gmu::VIEW_MODEL),
-        data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
-        data.normal = mu.getNormalMatrix();
-		renderer.setIsModel(false);
-        renderer.renderMesh(data);
-        mu.popMatrix(gmu::MODEL);
-    }
+		mu.pushMatrix(gmu::MODEL);
+		mu.translate(gmu::MODEL, b.pos[0], b.pos[1], b.pos[2]);
+		mu.rotate(gmu::MODEL, b.rotation, 0, 1, 0); // Rotate around Y axis
+		if (renderer.birdMeshes.size() > 0 && birdScene != nullptr) {
+			// world transform for the bird
+
+			float augment = 3.0f;
+			mu.scale(gmu::MODEL,
+					augment * birdImportedScale,
+					augment * birdImportedScale,
+					augment * birdImportedScale);
+
+			// render Assimp model relative to current MODEL
+			renderer.setIsModel(true);
+			aiRecursive_render(birdScene->mRootNode, renderer.birdMeshes, birdTextureIds);
+			renderer.setIsModel(false);
+
+		} 
+		mu.popMatrix(gmu::MODEL);
+	}
 }
 
 
@@ -1667,7 +1677,7 @@ void renderSim(void) {
 	// prepare 3-component arrays for the renderer API
 	float dirEye3[3] = { dAux[0], dAux[1], dAux[2] };
 	float dirAmb[3]  = { 0.2f, 0.2f, 0.2f };  // Increased ambient light
-	float sunIntensity = 2.0f; // 1.0 = same, 2.0 = twice as bright
+	float sunIntensity = 1.0f;
 	float dirDiff[3] = { 0.6f * sunIntensity, 0.6f * sunIntensity, 0.6f * sunIntensity };  // Increased diffuse
 	float dirSpec[3] = { 0.8f * sunIntensity, 0.8f * sunIntensity, 0.8f * sunIntensity };  // Increased specular
 
@@ -2426,29 +2436,37 @@ void buildScene()
 
 	// -------- TOWER MODEL --------
 
-    std::string towerObj = "beta_tower/beta_tower.obj";  // folder next to your EXE
+    std::string towerObj = "beta_tower/beta_tower.obj";
     printf("[TOWER] Loading: %s\n", towerObj.c_str());
 
     if (!Import3DFromFile(towerObj.c_str(), towerImporter, towerScene, towerImportedScale))
         return;
     
     strcpy(model_dir, "beta_tower/");
-	// create meshes & textures for the drone model using the existing helper
 	renderer.towerMeshes = createMeshFromAssimp(towerScene, towerTextureIds);
     if (!towerTextureIds) { printf("Tower textures not loaded\n"); }
 
 	// -------- PACKAGE SETTINGS --------
-	std::string packageObj = "package_orb/sci-fi_energy_orb.obj";  // folder next to your EXE
+	std::string packageObj = "package_orb/sci-fi_energy_orb.obj";
     printf("[PACKAGE] Loading: %s\n", packageObj.c_str());
 
     if (!Import3DFromFile(packageObj.c_str(), packageImporter, packageScene, packageImportedScale))
         return;
     
     strcpy(model_dir, "package_orb/");
-	// create meshes & textures for the drone model using the existing helper
 	renderer.packageMeshes = createMeshFromAssimp(packageScene, packageTextureIds);
-    if (!packageTextureIds) { printf("Tower textures not loaded\n"); }
+    if (!packageTextureIds) { printf("Package textures not loaded\n"); }
 
+	// -------- BIRD SETTINGS --------
+	std::string birdObj = "bird/anomaly.obj"; 
+    printf("[BIRD] Loading: %s\n", birdObj.c_str());
+
+    if (!Import3DFromFile(birdObj.c_str(), birdImporter, birdScene, birdImportedScale))
+        return;
+    
+    strcpy(model_dir, "bird/");
+	renderer.birdMeshes = createMeshFromAssimp(birdScene, birdTextureIds);
+    if (!birdTextureIds) { printf("Bird textures not loaded\n"); }
 
 
 	glEnable(GL_DEPTH_TEST);
