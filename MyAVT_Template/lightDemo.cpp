@@ -111,8 +111,8 @@ const float DRONE_BLINK_PERIOD = 0.12f;      // visual blink period while invuln
 const float BILLBOARD_SCALE = 0.2f;
 
 // --- Particle parameters ---
-const int MAX_PARTICLES = 500;
-const float PARTICLE_SIZE = 0.05f;
+const int MAX_PARTICLES = 200;
+const float PARTICLE_SIZE = 0.03f;
 const float BATTERY_STAGES[3] = { 0.6f, 0.4f, 0.15f };
 
 int particlesPerSpawn = 1;
@@ -375,7 +375,7 @@ void initParticle_singular(Particle &particle, float color) {
 	particle.b = color;
 
 	particle.life = 1.0f;		/* vida inicial */
-	particle.fade = 0.005f;	    /* step de decréscimo da vida para cada iteração */
+	particle.fade = 0.05f;	    /* step de decréscimo da vida para cada iteração */
 }
 
 
@@ -1962,6 +1962,8 @@ void renderSim(void) {
 
 		for (int i = 0; i < MAX_PARTICLES; i++)
 		{
+			if (particle[i].life <= 0.0f) continue; //dead particle
+			
 			mu.pushMatrix(gmu::MODEL);
 			mu.translate(gmu::MODEL, particle[i].x, particle[i].y, particle[i].z);
 			mu.scale(gmu::MODEL, PARTICLE_SIZE, PARTICLE_SIZE, PARTICLE_SIZE); // Particle size
@@ -1997,7 +1999,6 @@ void renderSim(void) {
 		}
 		glDepthMask(GL_TRUE); //make depth buffer again writeable
 		renderer.setTexUnit(3, 3); // Reset to default texture unit
-
 	}
 
 
