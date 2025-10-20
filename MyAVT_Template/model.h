@@ -4,7 +4,7 @@
 
 #define MAX_TEXTURES 16
 
-enum texType {DIFFUSE, SPECULAR, NORMALS, BUMP};
+enum texType {DIFFUSE, SPECULAR, NORMALS, BUMP, EMISSIVE};
 
 struct Material{
 	float diffuse[4];
@@ -18,7 +18,7 @@ struct Material{
 struct MyMesh {
 		GLuint vao;
 		GLuint texUnits[MAX_TEXTURES];
-		texType texTypes[4];
+		texType texTypes[5];
 		float transform[16];
 		GLuint numIndexes;
 		unsigned int type;

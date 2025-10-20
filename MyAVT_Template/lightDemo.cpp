@@ -74,22 +74,25 @@ bool isPaused = false;
 // --- To import models ---
 Assimp::Importer droneImporter;
 Assimp::Importer towerImporter;
+Assimp::Importer packageImporter;
 
 // the global Assimp scene object
 const aiScene* droneScene;
 const aiScene* towerScene;
+const aiScene* packageScene;
 
 // scale factor for the Assimp model to fit in the window
 float droneImportedScale;
 float towerImportedScale;
+float packageImportedScale;
 
-// --- Drone Model Data ---
-GLuint* droneTextureIds;       // texture array for the drone (filled by createMeshFromAssimp)
+// --- Model Data ---
+GLuint* droneTextureIds;       
 GLuint* towerTextureIds;
+GLuint* packageTextureIds;
+
 
 char model_dir[50];  //initialized by the user input at the console
-
-bool normalMapKey = TRUE;
 
 //External array storage defined in AVTmathLib.cpp
 
@@ -269,7 +272,7 @@ struct Package {
     bool pickedUp = false;    // is it currently attached to the drone?
     int src_i = -1, src_j = -1;
     int dst_i = -1, dst_j = -1;
-	float dronePos[3] = {-0.2f, -0.4f, -0.2f}; // local offset relative to drone when picked up
+	float dronePos[3] = {0.0f, -0.5f, 0.0f}; // local offset relative to drone when picked up
     float towerPos[3] = {-0.5f, 3.0f, -0.5f}; // world position on tower roof
 	float worldPos[3] = {0.f, 0.f, 0.f}; // current world position (updated when attached)
 } currentPackage;
@@ -497,7 +500,7 @@ void checkPackagePickupAndDelivery() {
 		float dz = drone.pos[2] - currentPackage.worldPos[2];
 		float dist = sqrtf(dx * dx + dy * dy + dz * dz);
 
-		const float pickupRadius = 2.0f;
+		const float pickupRadius = 1.0f;
 		if (dist <= pickupRadius && !isGameOver) {
 			currentPackage.pickedUp = true;
 			printf("[PACKAGE] picked up\n");
@@ -1251,6 +1254,7 @@ void aiRecursive_render(const aiNode* nd,
 		// Reset material flags for each mesh
 		glUniform1i(renderer.getNormalMapLoc(), false);
 		glUniform1i(renderer.getSpecularMapLoc(), false);
+		glUniform1i(renderer.getEmissiveMapLoc(), false);
 		glUniform1ui(renderer.getDiffMapCountLoc(), 0);
 
 		unsigned int meshIdx = nd->mMeshes[n];
@@ -1280,6 +1284,9 @@ void aiRecursive_render(const aiNode* nd,
 				} else if (myMeshes[meshIdx].texTypes[i] == NORMALS) {
 					renderer.setTexUnit(7, texId);      // normal map on unit 7
 					glUniform1i(renderer.getNormalMapLoc(), GL_TRUE);
+				} else if (myMeshes[meshIdx].texTypes[i] == EMISSIVE) {
+					renderer.setTexUnit(8, texId);      // emissive map on unit 8
+					glUniform1i(renderer.getEmissiveMapLoc(), GL_TRUE);
 				} else {
 					printf("Texture Map not supported\n");
 				}
@@ -1342,17 +1349,34 @@ void drawPackage(dataMesh &data) {
         currentPackage.worldPos[1] = towerPosY + currentPackage.towerPos[1];
         currentPackage.worldPos[2] = towerPosZ + currentPackage.towerPos[2];
     }
-    mu.scale(gmu::MODEL, 0.4f, 0.4f, 0.4f); // package size
-    mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
-    mu.computeNormalMatrix3x3();
+    // ----- Prefer the Assimp model if present; otherwise fallback to cube -----
+    if (!renderer.packageMeshes.empty() && packageScene != nullptr) {
+        // scale model to your old “0.4 cube” size — tweak augment if needed
+        const float augment = 0.8f;
+        mu.scale(gmu::MODEL,
+                 augment * packageImportedScale,
+                 augment * packageImportedScale,
+                 augment * packageImportedScale);
 
-    data.meshID = 0; // Cube mesh
-    data.texMode = 0;
-    data.vm = mu.get(gmu::VIEW_MODEL);
-    data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
-    data.normal = mu.getNormalMatrix();
-	renderer.setIsModel(false);
-    renderer.renderMesh(data);
+        // matrices & normal matrix are set inside aiRecursive_render already (you added that) :contentReference[oaicite:4]{index=4}
+        renderer.setIsModel(true);
+        aiRecursive_render(packageScene->mRootNode, renderer.packageMeshes, packageTextureIds);
+        renderer.setIsModel(false);
+    } else {
+        // Fallback: draw your old cube
+        mu.scale(gmu::MODEL, 0.4f, 0.4f, 0.4f);
+        mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+        mu.computeNormalMatrix3x3();
+
+        data.meshID = 0; // Cube mesh
+        data.texMode = 0;
+        data.vm   = mu.get(gmu::VIEW_MODEL);
+        data.pvm  = mu.get(gmu::PROJ_VIEW_MODEL);
+        data.normal = mu.getNormalMatrix();
+
+        renderer.setIsModel(false);
+        renderer.renderMesh(data);
+    }
 
     mu.popMatrix(gmu::MODEL);
 }
@@ -2412,6 +2436,19 @@ void buildScene()
 	// create meshes & textures for the drone model using the existing helper
 	renderer.towerMeshes = createMeshFromAssimp(towerScene, towerTextureIds);
     if (!towerTextureIds) { printf("Tower textures not loaded\n"); }
+
+	// -------- PACKAGE SETTINGS --------
+	std::string packageObj = "package_orb/sci-fi_energy_orb.obj";  // folder next to your EXE
+    printf("[PACKAGE] Loading: %s\n", packageObj.c_str());
+
+    if (!Import3DFromFile(packageObj.c_str(), packageImporter, packageScene, packageImportedScale))
+        return;
+    
+    strcpy(model_dir, "package_orb/");
+	// create meshes & textures for the drone model using the existing helper
+	renderer.packageMeshes = createMeshFromAssimp(packageScene, packageTextureIds);
+    if (!packageTextureIds) { printf("Tower textures not loaded\n"); }
+
 
 
 	glEnable(GL_DEPTH_TEST);

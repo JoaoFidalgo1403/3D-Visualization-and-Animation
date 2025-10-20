@@ -13,12 +13,15 @@ uniform sampler2D texmap3;
 uniform uint  diffMapCount;       // 0 = none, 1 = texUnitDiff0, 2 = texUnitDiff0 * texUnitDiff1
 uniform bool  normalMap;
 uniform bool  specularMap;
+uniform bool  emissiveMap;     
+
 
 // ---------- Imported model-specific samplers ----------
 uniform sampler2D texUnitDiff0;
 uniform sampler2D texUnitDiff1;
 uniform sampler2D texUnitSpec;
 uniform sampler2D texUnitNormalMap;
+uniform sampler2D texUnitEmissive;    // bind emissive texture here
 
 // ---------- Fog ----------
 uniform vec3  fogColor;     // Color of the fog
@@ -29,7 +32,7 @@ struct Materials {
     vec4 diffuse;
     vec4 ambient;
     vec4 specular;
-    vec4 emissive;
+    vec4 emissive;   // Ke
     float shininess;
     int   texCount;
 };
@@ -55,8 +58,6 @@ uniform float spotCosCutOff;
 uniform bool  is_Hud;
 uniform vec4  uHudColor;
 uniform float uAlpha;
-
-// NOTE: this was referenced but not declared in your snippet
 uniform bool  uIsImportedModel;
 
 // ---------- Lights ----------
@@ -285,7 +286,7 @@ void main() {
         colorOut.rgb = mix(fogC, colorOut.rgb, fogFactor);
         return;
     } else {
-        // ===== Imported model path (now using the SAME lights/toggles) =====
+        // ===== Imported model path (now using emissive map) =====
 
         // ----- Normal (object or normal-mapped via TBN) -----
         vec3 n;
@@ -297,8 +298,8 @@ void main() {
             n = normalize(DataIn.normal);
         }
 
-        vec3 v       = normalize(DataIn.eye);     // view dir (eye space)
-        vec3 p       = DataIn.fragPos;            // frag position (eye space)
+        vec3 v = normalize(DataIn.eye);   // view dir (eye space)
+        vec3 p = DataIn.fragPos;          // frag position (eye space)
 
         // ----- Build material colors from imported textures -----
         // Diffuse/albedo
@@ -318,7 +319,6 @@ void main() {
 
         // Ambient color — usually albedo-tinted so dark areas don’t glow
         vec3 ambC = mat.ambient.rgb * albedo;
-
         float shin = mat.shininess;
 
         // ----- Accumulate lights exactly like the other path -----
@@ -344,8 +344,18 @@ void main() {
             }
         }
 
-        // Emissive and output
-        vec3 finalRGB = clamp(result + mat.emissive.rgb, 0.0, 1.0);
+        // ----- Emissive: map_Ke modulates Ke per-pixel -----
+        vec3 emissiveC = mat.emissive.rgb;
+        if (emissiveMap) {
+            vec3 emTex = texture(texUnitEmissive, DataIn.tex_coord).rgb;
+            // If emissive textures are stored in sRGB and not sampled from an sRGB texture,
+            // uncomment the next line to linearize:
+            // emTex = pow(emTex, vec3(2.2));
+            emissiveC *= emTex;
+        }
+
+        // Output (emission is added to lit result)
+        vec3 finalRGB = clamp(result + emissiveC, 0.0, 1.0);
         colorOut = vec4(finalRGB, uAlpha);
 
         // Fog (same treatment)

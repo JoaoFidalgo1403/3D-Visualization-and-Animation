@@ -141,6 +141,14 @@ bool LoadGLTexturesTUs(const aiScene*& scene, GLuint*& textureIds, unordered_map
 			textureIdMap[filename] = 0;
 		}
 
+		for (unsigned int i = 0; i < scene->mMaterials[m]->GetTextureCount(aiTextureType_EMISSIVE); i++) {
+			scene->mMaterials[m]->GetTexture(aiTextureType_EMISSIVE, i, &path);
+			filename = model_dir;
+			filename.append(path.data);
+			textureIdMap[filename] = 0; // reserve a TU
+		}
+
+
 	}
 
 	int numTextures = textureIdMap.size();
@@ -319,6 +327,7 @@ vector<struct MyMesh> createMeshFromAssimp(const aiScene*& sc, GLuint*& textureI
 			aMesh.mat.texCount = TUcount + 1;
 			TUcount++;
 		}
+
 		for (unsigned int i = 0; i < mtl->GetTextureCount(aiTextureType_NORMALS); i++) {
 			mtl->GetTexture(aiTextureType_NORMALS, i, &texPath);
 			filename = model_dir;
@@ -327,6 +336,19 @@ vector<struct MyMesh> createMeshFromAssimp(const aiScene*& sc, GLuint*& textureI
 
 			aMesh.texUnits[TUcount] = TU;
 			aMesh.texTypes[TUcount] = NORMALS;
+			aMesh.mat.texCount = TUcount + 1;
+			TUcount++;
+		}
+
+		// meshFromAssimp.cpp – inside createMeshFromAssimp(...), after NORMALS loop
+		for (unsigned int i = 0; i < mtl->GetTextureCount(aiTextureType_EMISSIVE); ++i) {
+			mtl->GetTexture(aiTextureType_EMISSIVE, i, &texPath);
+			filename = model_dir;
+			filename.append(texPath.data);
+			TU = textureIdMap[filename];
+
+			aMesh.texUnits[TUcount] = TU;
+			aMesh.texTypes[TUcount] = EMISSIVE;
 			aMesh.mat.texCount = TUcount + 1;
 			TUcount++;
 		}

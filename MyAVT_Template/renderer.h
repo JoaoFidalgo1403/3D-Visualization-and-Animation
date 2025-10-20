@@ -62,6 +62,7 @@ public:
   GLint getVmLoc() const { return vm_loc; }
   GLint getNormalLoc() const { return normal_loc; }
   GLint getNormalMapLoc() const { return normalMap_loc; }
+  GLint getEmissiveMapLoc() const { return emissiveMap_loc; }
   GLint getSpecularMapLoc() const { return specularMap_loc; }
   GLint getDiffMapCountLoc() const { return diffMapCount_loc; }
 
@@ -114,6 +115,7 @@ public:
   std::vector<struct MyMesh> myMeshes;
   std::vector<struct MyMesh> droneMeshes;
   std::vector<struct MyMesh> towerMeshes;
+  std::vector<struct MyMesh> packageMeshes;
 
   /// Object of class Texture that manage an array of Texture Objects
   Texture TexObjArray;
@@ -129,6 +131,7 @@ private:
   GLint pvm_loc, vm_loc, normal_loc, lpos_loc, texMode_loc;
 
   GLint normalMap_loc = -1;
+  GLint emissiveMap_loc = -1;
   GLint specularMap_loc = -1;
   GLint diffMapCount_loc = -1;
 

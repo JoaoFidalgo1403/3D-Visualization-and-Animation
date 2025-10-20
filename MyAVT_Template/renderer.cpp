@@ -156,22 +156,23 @@ bool Renderer::setRenderMeshesShaderProg(const std::string& vertShaderPath, cons
         
     glUseProgram(program);
     // fixed bindings
-    glUniform1i(glGetUniformLocation(program, "texmap"),       0);
-    glUniform1i(glGetUniformLocation(program, "texmap1"),      1);
-    glUniform1i(glGetUniformLocation(program, "texmap2"),      2);
-    glUniform1i(glGetUniformLocation(program, "texmap3"),      3);
-    glUniform1i(glGetUniformLocation(program, "texUnitDiff0"), 4);
-    glUniform1i(glGetUniformLocation(program, "texUnitDiff1"), 5);
-    glUniform1i(glGetUniformLocation(program, "texUnitSpec"),  6);
-    glUniform1i(glGetUniformLocation(program, "texUnitNormal"),7);
-
+    glUniform1i(glGetUniformLocation(program, "texmap"),         0);
+    glUniform1i(glGetUniformLocation(program, "texmap1"),        1);
+    glUniform1i(glGetUniformLocation(program, "texmap2"),        2);
+    glUniform1i(glGetUniformLocation(program, "texmap3"),        3);
+    glUniform1i(glGetUniformLocation(program, "texUnitDiff0"),   4);
+    glUniform1i(glGetUniformLocation(program, "texUnitDiff1"),   5);
+    glUniform1i(glGetUniformLocation(program, "texUnitSpec"),    6);
+    glUniform1i(glGetUniformLocation(program, "texUnitNormal"),  7);
+    glUniform1i(glGetUniformLocation(program, "texUnitEmissive"),8);
 
 
     // defaults for model flags
     GLint u;
-    u = glGetUniformLocation(program, "normalMap");    if (u >= 0) glUniform1i(u, false);
-    u = glGetUniformLocation(program, "specularMap");  if (u >= 0) glUniform1i(u, false);
     u = glGetUniformLocation(program, "diffMapCount");    if (u >= 0) glUniform1i(u, 0);
+    u = glGetUniformLocation(program, "normalMap");       if (u >= 0) glUniform1i(u, false);
+    u = glGetUniformLocation(program, "specularMap");     if (u >= 0) glUniform1i(u, false);
+    u = glGetUniformLocation(program, "emissiveMap");     if (u >= 0) glUniform1i(u, false);
 
     pvm_loc = glGetUniformLocation(program, "m_pvm");
     vm_loc = glGetUniformLocation(program, "m_viewModel");
@@ -187,9 +188,11 @@ bool Renderer::setRenderMeshesShaderProg(const std::string& vertShaderPath, cons
     tex_loc[5] = glGetUniformLocation(program, "texUnitDiff1");
     tex_loc[6] = glGetUniformLocation(program, "texUnitSpec");    // optional spec map
     tex_loc[7] = glGetUniformLocation(program, "texUnitNormal");  // optional normal map
+    tex_loc[8] = glGetUniformLocation(program, "texUnitEmissive");  // optional emissive map
 
     normalMap_loc   = glGetUniformLocation(program, "normalMap");    // bool/int
     specularMap_loc = glGetUniformLocation(program, "specularMap");  // bool/int
+    emissiveMap_loc   = glGetUniformLocation(program, "emissiveMap");    // bool/int
     diffMapCount_loc   = glGetUniformLocation(program, "diffMapCount");    // int
 
 
