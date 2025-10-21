@@ -299,7 +299,7 @@ static float gTowerFloatAmp[6][6];    // bob amplitude per cell
 static float gTowerFloatPhase[6][6];  // random phase per cell
 static float gTowerFloatSpeed[6][6];  // bob speed (rad/s) per cell
 
-const float gTowerFitScale = 2.3f; // your current scale
+const float gTowerFitScale = 2.3f; // current scale
 
 const float BUILDING_WIDTH = 10.0f;
 const float BUILDING_DEPTH = 10.0f;
@@ -316,9 +316,8 @@ const float DOME_TRANSPARENCY = 0.25f;
 float lightPos[4] = {100.0f, 35.0f, 100.0f, 1.0f};
 
 // Directional light
-float dirLightDir[4] = { -1.0f, -0.5f, -0.3f, 0.0f }; // directional light (w=0)
+float dirLightDir[4] = { -1.0f, -0.7f, -0.3f, 0.0f }; // directional light (w=0)
 // Pseudo sun position in world space (for lens flare, etc.)
-float gSunWorldPos[3] = {0.0f, 0.0f, 0.0f};
 
 static inline void normalize3(const float in[3], float out[3]) {
     float len = sqrtf(in[0]*in[0] + in[1]*in[1] + in[2]*in[2]);
@@ -358,6 +357,11 @@ bool night_mode = false;
 bool plight_mode = true;
 bool headlights_mode = true;
 bool fog_mode = true;
+
+// Render globals
+float cameraPos[3], billBoardPos[3], particlePos[3];
+float particle_color[4];
+GLfloat planeY[4] = { 0,1,0,0 };
 
 /// ::::::::::::::::::::::::::::::::::::::::::::::::CALLBACK FUNCIONS:::::::::::::::::::::::::::::::::::::::::::::::::://///
 
@@ -462,23 +466,12 @@ static inline float towerBob(int i, int j) {
          * gTowerFloatAmp[i][j];
 }
 
-
-inline float towerTopY_fixed50(int i, int j) {
-    const float t = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
-    const float yBob = gTowerBaseOffset[i][j]
-                     + std::sin(t * gTowerFloatSpeed[i][j] + gTowerFloatPhase[i][j])
-                     * gTowerFloatAmp[i][j];
-
-    const float baseY = 25.0f + yBob; // same baseline as render/AABB
-    return baseY + 25.0f; // fixed height: [-25,+25] → top = center + 25
-}
-
 // check whether building (i,j) is valid for package placement
 static bool isValidBuildingCell(int i, int j) {
     if (i < 0 || i >= 6 || j < 0 || j >= 6) return false;
     // skip open areas
     for (auto &p : openAreas) if (p.first == i && p.second == j) return false;
-    // skip special blocked cell (your code already skipped these)
+    // skip special blocked cell (code already skipped these)
     if ((i == 1 || i == 2) && j == 1) return false;
     return true;
 }
@@ -804,7 +797,7 @@ AABB computeBuildingAABB(int i, int j) {
     return box;
 }
 
-// Tune these to match your bird model size at runtime.
+// Tune these to match bird model size at runtime.
 // Start generous; tighten after a quick visual test.
 static const float BIRD_HALF_WIDTH  = 0.35f;
 static const float BIRD_HEIGHT = 0.35f;
@@ -1219,69 +1212,72 @@ void printPointLightsAndDrone()
 // Track mouse motion while buttons are pressed
 
 void processMouseMotion(int xx, int yy)
-	{
-		int deltaX = - xx + startX;
-		int deltaY =    yy - startY;
+{
+	if (cameraMode == TOP_ORTHO || cameraMode == TOP_PERSPECTIVE)
+		return; // no mouse interaction in these modes
+		
+	int deltaX = - xx + startX;
+	int deltaY =    yy - startY;
 
-		// LEFT button dragging
-		if (tracking == 1) {
-			if (cameraMode == THIRD) {
-				// Horizontal drag -> orbit angle (radians)
-				float angleDelta = deltaX * CAM_ORBIT_SENSITIVITY_X;
-				camOrbitAngle += angleDelta;
+	// LEFT button dragging
+	if (tracking == 1) {
+		if (cameraMode == THIRD) {
+			// Horizontal drag -> orbit angle (radians)
+			float angleDelta = deltaX * CAM_ORBIT_SENSITIVITY_X;
+			camOrbitAngle += angleDelta;
 
-				// keep angle in [-pi, pi] or [0, 2pi]
-				const float TWO_PI = 6.28318530718f;
-				if (camOrbitAngle >= TWO_PI) camOrbitAngle -= TWO_PI;
-				if (camOrbitAngle < 0.0f) camOrbitAngle += TWO_PI;
+			// keep angle in [-pi, pi] or [0, 2pi]
+			const float TWO_PI = 6.28318530718f;
+			if (camOrbitAngle >= TWO_PI) camOrbitAngle -= TWO_PI;
+			if (camOrbitAngle < 0.0f) camOrbitAngle += TWO_PI;
 
-				// Vertical drag -> change orbit height
-				float heightDelta = deltaY * CAM_ORBIT_SENSITIVITY_Y;
-				camOrbitHeight += heightDelta;
-				if (camOrbitHeight < CAM_ORBIT_MIN_HEIGHT) camOrbitHeight = CAM_ORBIT_MIN_HEIGHT;
-				if (camOrbitHeight > CAM_ORBIT_MAX_HEIGHT) camOrbitHeight = CAM_ORBIT_MAX_HEIGHT;
+			// Vertical drag -> change orbit height
+			float heightDelta = deltaY * CAM_ORBIT_SENSITIVITY_Y;
+			camOrbitHeight += heightDelta;
+			if (camOrbitHeight < CAM_ORBIT_MIN_HEIGHT) camOrbitHeight = CAM_ORBIT_MIN_HEIGHT;
+			if (camOrbitHeight > CAM_ORBIT_MAX_HEIGHT) camOrbitHeight = CAM_ORBIT_MAX_HEIGHT;
 
-				// update start positions for smooth dragging
-				startX = xx;
-				startY = yy;
-
-				// recompute camX/camY/camZ not necessary — renderSim() computes camera from camOrbit* each frame
-				return;
-			}
-
-			// existing "orbit with alpha/beta" behavior for other modes
-			float alphaAux = alpha + (- xx + startX);
-			float betaAux  = beta  + (yy - startY);
-			float rAux = r;
-
-			if (betaAux > 85.0f)
-				betaAux = 85.0f;
-			else if (betaAux < -85.0f)
-				betaAux = -85.0f;
-
-			camX = rAux * sin(alphaAux * 3.14f / 180.0f) * cos(betaAux * 3.14f / 180.0f);
-			camZ = rAux * cos(alphaAux * 3.14f / 180.0f) * cos(betaAux * 3.14f / 180.0f);
-			camY = rAux * sin(betaAux * 3.14f / 180.0f);
-		}
-		// RIGHT button dragging: zoom (keep as before for THIRD as well)
-		else if (tracking == 2) {
-			float alphaAux = alpha;
-			float betaAux = beta;
-			float rAux = r + (deltaY * 0.01f);
-			if (rAux < 0.1f)
-				rAux = 0.1f;
-
-			camX = rAux * sin(alphaAux * 3.14f / 180.0f) * cos(betaAux * 3.14f / 180.0f);
-			camZ = rAux * cos(alphaAux * 3.14f / 180.0f) * cos(betaAux * 3.14f / 180.0f);
-			camY = rAux * sin(betaAux * 3.14f / 180.0f);
-
-			// update start coords so drag is incremental
+			// update start positions for smooth dragging
 			startX = xx;
 			startY = yy;
+
+			// recompute camX/camY/camZ not necessary — renderSim() computes camera from camOrbit* each frame
+			return;
 		}
-	//  uncomment this if not using an idle or refresh func
-	//	glutPostRedisplay();
+
+		// existing "orbit with alpha/beta" behavior for other modes
+		float alphaAux = alpha + (- xx + startX);
+		float betaAux  = beta  + (yy - startY);
+		float rAux = r;
+
+		if (betaAux > 85.0f)
+			betaAux = 85.0f;
+		else if (betaAux < -85.0f)
+			betaAux = -85.0f;
+
+		camX = rAux * sin(alphaAux * 3.14f / 180.0f) * cos(betaAux * 3.14f / 180.0f);
+		camZ = rAux * cos(alphaAux * 3.14f / 180.0f) * cos(betaAux * 3.14f / 180.0f);
+		camY = rAux * sin(betaAux * 3.14f / 180.0f);
 	}
+	// RIGHT button dragging: zoom (keep as before for THIRD as well)
+	else if (tracking == 2) {
+		float alphaAux = alpha;
+		float betaAux = beta;
+		float rAux = r + (deltaY * 0.01f);
+		if (rAux < 0.1f)
+			rAux = 0.1f;
+
+		camX = rAux * sin(alphaAux * 3.14f / 180.0f) * cos(betaAux * 3.14f / 180.0f);
+		camZ = rAux * cos(alphaAux * 3.14f / 180.0f) * cos(betaAux * 3.14f / 180.0f);
+		camY = rAux * sin(betaAux * 3.14f / 180.0f);
+
+		// update start coords so drag is incremental
+		startX = xx;
+		startY = yy;
+	}
+//  uncomment this if not using an idle or refresh func
+//	glutPostRedisplay();
+}
 
 void mouseWheel(int wheel, int direction, int x, int y) {
 
@@ -1305,9 +1301,9 @@ void mouseWheel(int wheel, int direction, int x, int y) {
 // :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 // :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 // :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-// Adapted to your Renderer setup (uses global `renderer`, HUD mesh id = 7, shader uniforms from Renderer)
+// Adapted to Renderer setup (uses global `renderer`, HUD mesh id = 7, shader uniforms from Renderer)
 
-// Assumes: global `Renderer renderer` and global `gmu mu` (from your codebase)
+// Assumes: global `Renderer renderer` and global `gmu mu` (from codebase)
 // Uses HUD quad mesh stored at renderer.myMeshes[7] (created in init with createQuad(1,1))
 // Expects flare->element[i].textureId to be a GL texture id (use renderer.setTexUnit(0, GLuint))
 // If you store textures in TexObjArray by index instead, call renderer.setTexUnit(0, /*index*/)
@@ -1408,9 +1404,6 @@ void render_flare(FLARE_DEF *flare, int lx, int ly, int *m_viewport) {  //lx, ly
 
 // :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 // :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-// :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-// :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
 
 void aiRecursive_render(const aiNode* nd,
                         std::vector<struct MyMesh>& myMeshes,
@@ -1503,7 +1496,7 @@ void aiRecursive_render(const aiNode* nd,
 
         // --- MATRICES from mu (this fixes the “spawns at package” bug) ---
         mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
-        // Use your global uniform IDs that were set when the mesh program was bound
+        // Use global uniform IDs that were set when the mesh program was bound
         glUniformMatrix4fv(renderer.getVmLoc(),   1, GL_FALSE, mu.get(gmu::VIEW_MODEL));
         glUniformMatrix4fv(renderer.getPvmLoc(),  1, GL_FALSE, mu.get(gmu::PROJ_VIEW_MODEL));
         mu.computeNormalMatrix3x3();
@@ -1556,7 +1549,7 @@ void drawPackage(dataMesh &data) {
     }
     // ----- Prefer the Assimp model if present; otherwise fallback to cube -----
     if (!renderer.packageMeshes.empty() && packageScene != nullptr) {
-        // scale model to your old “0.4 cube” size — tweak augment if needed
+        // scale model to old “0.4 cube” size — tweak augment if needed
         const float augment = 0.8f;
         mu.scale(gmu::MODEL,
                  augment * packageImportedScale,
@@ -1567,20 +1560,6 @@ void drawPackage(dataMesh &data) {
         renderer.setIsModel(true);
         aiRecursive_render(packageScene->mRootNode, renderer.packageMeshes, packageTextureIds);
         renderer.setIsModel(false);
-    } else {
-        // Fallback: draw your old cube
-        mu.scale(gmu::MODEL, 0.4f, 0.4f, 0.4f);
-        mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
-        mu.computeNormalMatrix3x3();
-
-        data.meshID = 0; // Cube mesh
-        data.texMode = 0;
-        data.vm   = mu.get(gmu::VIEW_MODEL);
-        data.pvm  = mu.get(gmu::PROJ_VIEW_MODEL);
-        data.normal = mu.getNormalMatrix();
-
-        renderer.setIsModel(false);
-        renderer.renderMesh(data);
     }
 
     mu.popMatrix(gmu::MODEL);
@@ -1613,8 +1592,6 @@ void drawBirds(dataMesh& data) {
 	}
 }
 
-
-
 void drawDrone(dataMesh &data) {
     // isolate from prior draws
     mu.pushMatrix(gmu::MODEL);
@@ -1636,47 +1613,343 @@ void drawDrone(dataMesh &data) {
 		renderer.setIsModel(true);
         aiRecursive_render(droneScene->mRootNode, renderer.droneMeshes, droneTextureIds);
 		renderer.setIsModel(false);
-
-        mu.popMatrix(gmu::MODEL);   // balance the first push
-        return;
-    }
-
-    mu.pushMatrix(gmu::MODEL);
-	mu.translate(gmu::MODEL, drone.pos[0], drone.pos[1], drone.pos[2]);
-	mu.rotate(gmu::MODEL, drone.yaw,   0, 1, 0);
-    mu.rotate(gmu::MODEL, drone.pitch, 0, 0, 1);
-    mu.rotate(gmu::MODEL, drone.roll,  1, 0, 0);
-
-	for (int i = 0; i < 5; i++) {
-		if (i==0) {
-			data.meshID = 0;
-		} else {
-			data.meshID = 3;
-		}
-		mu.pushMatrix(gmu::MODEL);
-		mu.translate(gmu::MODEL, drone_parts_position[i].x / 2.0f, drone_parts_position[i].y / 2.0f, drone_parts_position[i].z / 2.0f);
-		if (i == 0) {
-			mu.scale(gmu::MODEL, DRONE_WIDTH, DRONE_HEIGHT, DRONE_DEPTH);
-		} else if (i > 0 && i < 3) {
-			mu.scale(gmu::MODEL, 0.25f, 0.0025f, 0.25f);
-		} else {
-			mu.scale(gmu::MODEL, 0.3125f, 0.025f, 0.3125f);
-		}
-
-		mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
-		mu.computeNormalMatrix3x3();
-
-		data.texMode = 4;   //modulate diffuse color with texel color
-		data.vm = mu.get(gmu::VIEW_MODEL),
-		data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
-		data.normal = mu.getNormalMatrix();
-		renderer.setIsModel(false);
-		renderer.renderMesh(data);
-
-		mu.popMatrix(gmu::MODEL);
 	}
-	mu.popMatrix(gmu::MODEL);
+	
+     mu.popMatrix(gmu::MODEL);   // balance the first push
 }
+
+static void draw_floor(void) {
+	
+	dataMesh data;
+	mu.pushMatrix(gmu::MODEL);
+	mu.translate(gmu::MODEL, 0.0f, 0.0f, 0.0f);
+	mu.scale(gmu::MODEL, 100.0f, 0.1f, 100.0f);
+	mu.rotate(gmu::MODEL, -90.0f, 1.0f, 0.0f, 0.0f);
+	mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+	mu.computeNormalMatrix3x3();
+
+	data.meshID  = 6;          // quad mesh in renderer.myMeshes
+	data.texMode = 7;
+	data.vm      = mu.get(gmu::VIEW_MODEL);
+	data.pvm     = mu.get(gmu::PROJ_VIEW_MODEL);
+	data.normal  = mu.getNormalMatrix();
+
+	GLint prog;
+	glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
+	if (prog != 0) {
+		GLint loc1 = glGetUniformLocation(prog, "terrainTile1");
+		GLint loc2 = glGetUniformLocation(prog, "terrainTile2");
+		GLint loc_uAlpha = glGetUniformLocation(prog, "uAlpha");
+		if (loc1 >= 0) glUniform2f(loc1, 64.0f, 64.0f);
+		if (loc2 >= 0) glUniform2f(loc2, 32.0f, 32.0f);
+		if (loc_uAlpha >= 0) glUniform1f(loc_uAlpha, 0.4f); 
+
+	}
+	
+	renderer.setIsModel(false);
+	glDisable(GL_CULL_FACE);   //see the backface in the quad
+	renderer.renderMesh(data);
+	glEnable(GL_CULL_FACE);
+	mu.popMatrix(gmu::MODEL);
+
+}
+
+static void draw_objects(bool shadowMode)
+{
+    dataMesh data;
+
+    // ---------------------------------------------------------------------
+    // 1. Tower grid – 6x6 buildings with floating animation and emissive
+    //    highlighting of pickup/dropoff towers.  Skip open areas and central base.
+    	// time for animation (use engine's clock if different)
+	const float tSeconds = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+
+	glDisable(GL_CULL_FACE); // disable culling to see the buildings' inner faces
+
+	// Draw the Buildings
+	for (int i = 0; i < 6; ++i) {
+		for (int j = 0; j < 6; ++j) {
+
+			bool skip = false;
+			for (auto& p : openAreas) {
+				if (p.first == i && p.second == j) { skip = true; break; }
+			}
+			if (skip || ((i == 1 || i == 2) && j == 1)) continue;
+
+			mu.pushMatrix(gmu::MODEL);
+
+			// base position: center of the cell
+			const float worldX = -20.0f + i * 20.0f + BUILDING_WIDTH  * 0.5f;
+			const float worldZ = -20.0f + j * 20.0f + BUILDING_DEPTH  * 0.5f;
+
+			// --- floating effect (per-cell) ---
+			const float yBob =
+				gTowerBaseOffset[i][j] +
+				std::sin(tSeconds * gTowerFloatSpeed[i][j] + gTowerFloatPhase[i][j]) *
+				gTowerFloatAmp[i][j];
+
+			const float worldY = 25.0f + yBob;  // previous baseline (20) + float offset
+
+			mu.translate(gmu::MODEL, worldX, worldY, worldZ);
+
+			if (renderer.towerMeshes.size() > 0 && towerScene != nullptr) {
+
+				mu.scale(gmu::MODEL, gTowerFitScale, gTowerFitScale, gTowerFitScale);
+				mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+				mu.computeNormalMatrix3x3();
+
+
+				// highlight package source/destination: bump EMISSIVE (Ke) on the first tower mesh
+				float savedEmissive[4] = {0,0,0,0};
+				bool  changed = false;
+
+				if (currentPackage.active) {
+					const bool isSrc = (!currentPackage.pickedUp && i == currentPackage.src_i && j == currentPackage.src_j);
+					const bool isDst = ( currentPackage.pickedUp && i == currentPackage.dst_i && j == currentPackage.dst_j);
+
+					if (isSrc || isDst) {
+						if (!renderer.towerMeshes.empty()) {
+							// save old emissive (Ke)
+							memcpy(savedEmissive, renderer.towerMeshes[0].mat.emissive, sizeof(savedEmissive));
+
+							// set Ke to RED for source, GREEN for destination
+							const float col[4] = {
+								isSrc ? 0.0f : 1.0f,  // R
+								isSrc ? 1.0f : 0.0f,  // G
+								0.0f,                 // B
+								1.0f                  // A (unused in our shader, but keep 1)
+							};
+							memcpy(renderer.towerMeshes[0].mat.emissive, col, sizeof(col));
+							changed = true;
+						}
+					}
+				}
+
+				renderer.setIsModel(true);
+				aiRecursive_render(towerScene->mRootNode, renderer.towerMeshes, towerTextureIds);
+				renderer.setIsModel(false);
+
+				if (changed) {
+					memcpy(renderer.towerMeshes[0].mat.emissive, savedEmissive, sizeof(savedEmissive));
+				}
+
+			}
+
+			mu.popMatrix(gmu::MODEL);
+		}
+	}
+
+	glEnable(GL_CULL_FACE); // re-enable culling for other objects
+
+    // ---------------------------------------------------------------------
+    // Stop here if drawing the shadow pass
+    if (shadowMode) return;
+
+    // ---------------------------------------------------------------------
+    // 2. Dynamic objects: birds, package, and drone
+    drawBirds(data);
+    drawPackage(data);
+    drawDrone(data);
+
+    // ---------------------------------------------------------------------
+    // 3. Billboards – 10x10 grid of quads facing the camera
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	
+	renderer.setTexUnit(3, 4); // Billboard texture
+
+	data.meshID = 6; // Quad mesh for the billboards
+	for (int i=0; i<0; i++) {
+		for (int j=0; j<10; j++){
+			mu.pushMatrix(gmu::MODEL);
+
+			billBoardPos[0] = i*10.0f; billBoardPos[1] = 3.0f; billBoardPos[2] = j*10.0f;
+
+			mu.translate(gmu::MODEL, billBoardPos[0], billBoardPos[1], billBoardPos[2]);
+			mu.scale(gmu::MODEL, BILLBOARD_SCALE, BILLBOARD_SCALE, BILLBOARD_SCALE); // Billboard size
+
+			l3dBillboardCylindricalBegin(cameraPos, billBoardPos);
+
+			data.texMode = 5;   //modulate diffuse color with texel color
+			data.vm = mu.get(gmu::VIEW_MODEL);
+			data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+			data.normal = mu.getNormalMatrix();
+
+			mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+			mu.computeNormalMatrix3x3();
+
+			renderer.renderMesh(data);
+			mu.popMatrix(gmu::MODEL);
+		}
+	}
+
+	glDisable(GL_BLEND);
+	renderer.setTexUnit(3, 3); // Reset to default texture unit
+
+    // ---------------------------------------------------------------------
+    // 4. Particles – billboarded smoke quads
+
+	static int lastTime = glutGet(GLUT_ELAPSED_TIME);
+	int now = glutGet(GLUT_ELAPSED_TIME);
+	float dt = (now - lastTime) * 0.001f;
+	lastTime = now;
+
+    // Draw Particles (smoke) when battery low
+	if (!smoke_toggle && batteryLevel <= BATTERY_STAGES[0]) {
+		initParticles(0.8f);
+		smoke_toggle = true;
+	}
+	
+	if(smoke_toggle){
+		
+		float color, particle_rate;
+
+		if (batteryLevel <= BATTERY_STAGES[2]) {
+			color = 0.1f; particlesPerSpawn = 5; particleSpawnRate = 0.05f;
+		} else if (batteryLevel <= BATTERY_STAGES[1]) {
+			color = 0.5f; particlesPerSpawn = 10; particleSpawnRate = 0.5f;
+		} else if (batteryLevel <= BATTERY_STAGES[0]) {
+			color = 0.8f; particlesPerSpawn = 20; particleSpawnRate = 1.5f;
+		} else { 
+			color = 1.0f;
+		}
+		
+		updateParticles(dt, color);
+
+		data.meshID = 6; // For the quad
+		renderer.setTexUnit(3, 5);  //particle texture
+		data.texMode = 6;
+
+
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+		glDepthMask(GL_FALSE);  //Depth Buffer Read Only
+
+
+		for (int i = 0; i < MAX_PARTICLES; i++)
+		{
+			if (particle[i].life <= 0.0f) continue; //dead particle
+			
+			mu.pushMatrix(gmu::MODEL);
+			mu.translate(gmu::MODEL, particle[i].x, particle[i].y, particle[i].z);
+			mu.scale(gmu::MODEL, PARTICLE_SIZE, PARTICLE_SIZE, PARTICLE_SIZE); // Particle size
+
+			particlePos[0] = particle[i].x; particlePos[1] = particle[i].y; particlePos[2] = particle[i].z;
+			l3dBillboardSphericalBegin(cameraPos, particlePos);
+
+			data.vm = mu.get(gmu::VIEW_MODEL);
+			data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+			data.normal = mu.getNormalMatrix();
+
+			// send matrices to OGL
+			mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+			mu.computeNormalMatrix3x3();
+
+			// save
+			float savedDiffuse[4];
+			memcpy(savedDiffuse, renderer.myMeshes[data.meshID].mat.diffuse, sizeof(savedDiffuse));
+
+			// set to particle color
+			renderer.myMeshes[data.meshID].mat.diffuse[0] = particle[i].r;
+			renderer.myMeshes[data.meshID].mat.diffuse[1] = particle[i].g;
+			renderer.myMeshes[data.meshID].mat.diffuse[2] = particle[i].b;
+			renderer.myMeshes[data.meshID].mat.diffuse[3] = particle[i].life; // alpha
+
+			// render
+			renderer.renderMesh(data);
+
+			// restore
+			memcpy(renderer.myMeshes[data.meshID].mat.diffuse, savedDiffuse, sizeof(savedDiffuse));
+
+			mu.popMatrix(gmu::MODEL);
+		}
+		glDepthMask(GL_TRUE); //make depth buffer again writeable
+		renderer.setTexUnit(3, 3); // Reset to default texture unit
+	}
+
+
+    // ---------------------------------------------------------------------
+    // 5. Dome – translucent sphere around the city (faces switched if inside)
+    // configure translucency
+	renderer.activateRenderMeshesShaderProg(); // ensure shader bound
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glDepthMask(GL_FALSE); // don't write to depth buffer for translucent objects
+
+	// Decide whether to render inner faces (if camera inside) or outer faces.
+	// (Optional: compute camera world pos depending on cameraMode — here is a simple approximation)
+	float camWX=0.f, camWY=0.f, camWZ=0.f;
+	if (cameraMode == THIRD) {
+		float yawRad = drone.yaw * DEG2RAD;
+		// use camOrbitAngle / camOrbitRadius from code
+		float finalAngle = camOrbitAngle - (camOrbitFollowYaw ? yawRad : 0.0f);
+		float ox = camOrbitRadius * cosf(finalAngle);
+		float oz = camOrbitRadius * sinf(finalAngle);
+		camWX = drone.pos[0] + ox;
+		camWY = drone.pos[1] + camOrbitHeight;
+		camWZ = drone.pos[2] + oz;
+	} else if (cameraMode == FOLLOW) {
+		camWX = drone.pos[0] + camX;
+		camWY = drone.pos[1] + camY;
+		camWZ = drone.pos[2] + camZ;
+	} else { // TOP modes: approximate
+		camWX = 0.0f; camWY = 50.0f; camWZ = 0.0f;
+	}
+
+	// camera distance test
+	float dx = camWX - CITY_CENTER[0];
+	float dy = camWY - CITY_CENTER[1];
+	float dz = camWZ - CITY_CENTER[2];
+	float camDist = sqrtf(dx*dx + dy*dy + dz*dz);
+	bool cameraInside = (camDist < DOME_RADIUS);
+
+	// set culling to draw appropriate faces
+	glEnable(GL_CULL_FACE);
+	if (cameraInside) {
+		glCullFace(GL_FRONT); // draw back faces so inner surface is visible
+	} else {
+		glCullFace(GL_BACK);  // draw front faces (normal outer view)
+	}
+
+	// transform + render dome (meshID 2 in buildScene)
+	mu.pushMatrix(gmu::MODEL);
+	mu.translate(gmu::MODEL, CITY_CENTER[0], CITY_CENTER[1], CITY_CENTER[2]);
+	mu.scale(gmu::MODEL, DOME_RADIUS, DOME_RADIUS, DOME_RADIUS);
+	mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+	mu.computeNormalMatrix3x3();
+
+	data.meshID = 2;  
+	data.texMode = 0;  
+	data.vm  = mu.get(gmu::VIEW_MODEL);
+	data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+	data.normal = mu.getNormalMatrix();
+
+	// set alpha uniform (make sure mesh.frag has 'uniform float uAlpha;')
+	GLint progID = 0;
+	glGetIntegerv(GL_CURRENT_PROGRAM, &progID);
+	if (progID != 0) {
+		GLint loc_uAlpha = glGetUniformLocation(progID, "uAlpha");
+		if (loc_uAlpha >= 0) glUniform1f(loc_uAlpha, DOME_TRANSPARENCY); // 0.0 = fully transparent, 1.0 = opaque
+	}
+
+	// actually draw it
+	renderer.setIsModel(false);
+	renderer.renderMesh(data);
+	mu.popMatrix(gmu::MODEL);
+
+	// restore GL state
+	glDepthMask(GL_TRUE);
+	glDisable(GL_BLEND);
+	glCullFace(GL_BACK); // restore default
+	if (progID != 0) {
+		GLint loc_uAlpha = glGetUniformLocation(progID, "uAlpha");
+		if (loc_uAlpha >= 0) glUniform1f(loc_uAlpha, 1.0f); // reset alpha
+	}
+
+}
+
 
 // Place point lights at the top of the N tallest buildings
 void updatePointLightsFromBuildings()
@@ -1738,12 +2011,127 @@ void updatePointLightsFromBuildings()
     }
 }
 
+void setLights(bool reflectionMode) {
+
+	// --- Directional light ---
+	float dirEye4[4] = { dirLightDir[0], dirLightDir[1], dirLightDir[2], dirLightDir[3] };
+	float dAux[4];
+	mu.multMatrixPoint(gmu::VIEW, dirEye4, dAux);
+
+	// Flip Y for reflection if needed
+	if (reflectionMode)
+		dAux[1] *= -1.0f;
+
+	float dirEye3[3] = { dAux[0], dAux[1], dAux[2] };
+	float dirAmb[3]  = { 0.2f, 0.2f, 0.2f };
+	float sunIntensity = 1.0f;
+	float dirDiff[3] = { 0.6f * sunIntensity, 0.6f * sunIntensity, 0.6f * sunIntensity };
+	float dirSpec[3] = { 0.8f * sunIntensity, 0.8f * sunIntensity, 0.8f * sunIntensity };
+
+	GLint prog = 0;
+	glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
+
+	GLint loc_dir = glGetUniformLocation(prog, "dirLight.direction");
+	GLint loc_numP = glGetUniformLocation(prog, "numPointLights");
+	GLint loc_numS = glGetUniformLocation(prog, "numSpotLights");
+
+	if (prog != 0) {
+		if (loc_dir >= 0) {
+			float sunDir[3] = { -0.7f, reflectionMode ? 0.2f : -0.2f, -0.7f };
+			glUniform3fv(loc_dir, 1, sunDir);
+		}
+		if (loc_numP >= 0) glUniform1i(loc_numP, kNumPointLights);
+		if (loc_numS >= 0) glUniform1i(loc_numS, kNumSpotLights);
+	}
+
+	renderer.setDirectionalLight(dirEye3, dirAmb, dirDiff, dirSpec);
+
+	// --- Point lights ---
+	for (int i = 0; i < NUM_POINT_LIGHTS; i++) {
+	    float pAux4[4];
+	    mu.multMatrixPoint(gmu::VIEW, pointLightPos[i], pAux4);
+	    if (reflectionMode) pAux4[1] *= -1.0f;  // mirror Y
+	    float pEye3[3] = { pAux4[0], pAux4[1], pAux4[2] };
+
+		float intensity = 10.0f;
+	    float pAmb[3]  = { 0.02f, 0.02f, 0.02f };
+	    float pDiff[3] = { 0.60f * intensity, 0.50f * intensity, 0.40f * intensity };
+	    float pSpec[3] = { 0.50f * intensity, 0.50f * intensity, 0.50f * intensity };
+
+	    float constant  = 1.0f;
+	    float linear    = 0.09f;
+	    float quadratic = 0.032f;
+		
+	    renderer.setPointLight(i, pEye3, pAmb, pDiff, pSpec, constant, linear, quadratic);
+	}
+
+	// --- Spotlights ---
+	for (int i = 0; i < NUM_SPOT_LIGHTS; ++i) {
+
+		mu.pushMatrix(gmu::MODEL);
+		mu.translate(gmu::MODEL, drone.pos[0], drone.pos[1], drone.pos[2]);
+		mu.rotate(gmu::MODEL, drone.yaw,   0, 1, 0);
+		mu.rotate(gmu::MODEL, drone.pitch, 0, 0, 1);
+		mu.rotate(gmu::MODEL, drone.roll,  1, 0, 0);
+
+		float localOffset[4] = { spotLightOffset[i][0], spotLightOffset[i][1], spotLightOffset[i][2], 1.0f };
+		float worldPos4[4];
+		mu.multMatrixPoint(gmu::MODEL, localOffset, worldPos4);
+		float sAux4[4];
+		mu.multMatrixPoint(gmu::VIEW, worldPos4, sAux4);
+
+		if (reflectionMode) sAux4[1] *= -1.0f;  // flip Y
+		float sPos3[3] = { sAux4[0], sAux4[1], sAux4[2] };
+
+		float localForward[4] = { 0.0f, 1.0f, 0.0f, 0.0f };
+		float localRotated[4] = { -localForward[1], localForward[0], localForward[2], 0.0f };
+
+		float worldDir4[4];
+		mu.multMatrixPoint(gmu::MODEL, localRotated, worldDir4);
+		float eyeDir4[4];
+		mu.multMatrixPoint(gmu::VIEW, worldDir4, eyeDir4);
+
+		float sDir3[3] = { -eyeDir4[0], -eyeDir4[1], -eyeDir4[2] };
+		if (i >= 2) {
+			sDir3[0] =  eyeDir4[0];
+			sDir3[1] =  eyeDir4[1];
+			sDir3[2] =  eyeDir4[2];
+		}
+
+		if (reflectionMode) sDir3[1] *= -1.0f;  // flip direction Y too
+
+		float len = sqrtf(sDir3[0]*sDir3[0] + sDir3[1]*sDir3[1] + sDir3[2]*sDir3[2]);
+		if (len > 1e-6f) { sDir3[0] /= len; sDir3[1] /= len; sDir3[2] /= len; }
+
+		mu.popMatrix(gmu::MODEL);
+
+		float intensity = 5.0f;
+		float sAmb[3]  = { 1.0f, 1.0f, 1.0f };
+		float sDiff[3] = { 1.0f * intensity, 1.0f * intensity, 1.0f * intensity };
+		float sSpec[3] = { 0.8f * intensity, 0.8f * intensity, 0.8f * intensity };
+
+		if (i >= 2) {
+			intensity = 2.0f;
+			sAmb[0]  = 1.0f; sAmb[1]  = 0.0f; sAmb[2]  = 0.0f;
+			sDiff[0] = 2.0f * intensity; sDiff[1] = 0.0f; sDiff[2] = 0.0f;
+		}
+		const float PI = 3.14159265358979f;
+		float innerCutDeg = 12.5f, outerCutDeg = 17.5f;
+		float innerCutCos = cosf(innerCutDeg * PI / 180.0f);
+		float outerCutCos = cosf(outerCutDeg * PI / 180.0f);
+
+		float sConstant  = 1.0f;
+		float sLinear    = 0.09f;
+		float sQuadratic = 0.032f;
+
+		renderer.setSpotLight(i, sPos3, sDir3, innerCutCos, outerCutCos,
+			sAmb, sDiff, sSpec, sConstant, sLinear, sQuadratic);
+	}
+}
+
 
 void renderSim(void) {
 	FrameCount++;
-
-	float cameraPos[3], billBoardPos[3], particlePos[3];
-	float particle_color[4];
 
 	static int lastFrameTime = glutGet(GLUT_ELAPSED_TIME);
 	int nowFrame = glutGet(GLUT_ELAPSED_TIME);
@@ -1755,7 +2143,7 @@ void renderSim(void) {
 		updateDroneState(frameDt);
 	}
 
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
 	renderer.activateRenderMeshesShaderProg(); // use the required GLSL program to draw the meshes with illumination
 	
@@ -1774,7 +2162,7 @@ void renderSim(void) {
 			{
 				// smoothing yaw with shortest-path angular interpolation
 				static float smoothYaw = 0.0f; // persistent across frames
-				const float smoothFactor = 0.08f; // your previous value
+				const float smoothFactor = 0.08f; // previous value
 
 
 				float yawRad = drone.yaw * DEG2RAD;
@@ -1858,10 +2246,6 @@ void renderSim(void) {
 			break;
 	}
 
-	float lposAux[4];
-	mu.multMatrixPoint(gmu::VIEW, lightPos, lposAux);   //lightPos definido em World Coord so is converted to eye space
-	renderer.setLightPos(lposAux);
-
 	//Light settings
 	renderer.setNightMode(night_mode);
 	renderer.setPLightMode(plight_mode);
@@ -1869,255 +2253,6 @@ void renderSim(void) {
 
 	//Fog Mode
 	renderer.setFogMode(fog_mode);
-
-	// --- Directional light ---
-	// dirLightDir is a direction (w = 0.0f). Use multMatrixPoint with w==0 to transform vectors
-	float dirEye4[4] = { dirLightDir[0], dirLightDir[1], dirLightDir[2], dirLightDir[3] };
-	float dAux[4];
-	mu.multMatrixPoint(gmu::VIEW, dirEye4, dAux); // transforms ignoring translation because w==0
-
-	// prepare 3-component arrays for the renderer API
-	float dirEye3[3] = { dAux[0], dAux[1], dAux[2] };
-	float dirAmb[3]  = { 0.2f, 0.2f, 0.2f };  // Increased ambient light
-	float sunIntensity = 1.0f;
-	float dirDiff[3] = { 0.6f * sunIntensity, 0.6f * sunIntensity, 0.6f * sunIntensity };  // Increased diffuse
-	float dirSpec[3] = { 0.8f * sunIntensity, 0.8f * sunIntensity, 0.8f * sunIntensity };  // Increased specular
-
-	// Query currently bound program (safe even if renderer hides program id)
-	GLint prog = 0;
-	glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
-
-	// Query some key uniform locations used by the new shader
-	GLint loc_dir = glGetUniformLocation(prog, "dirLight.direction");
-	GLint loc_numP = glGetUniformLocation(prog, "numPointLights");
-	GLint loc_numS = glGetUniformLocation(prog, "numSpotLights");
-
-	// If the shader is active and locations valid, set them explicitly as a fallback
-	if (prog != 0) {
-		if (loc_dir >= 0) {
-			float sunDir[3] = { -0.7f, -0.2f, -0.7f };
-			glUniform3fv(loc_dir, 1, sunDir);
-		}
-
-		// ensure shader knows how many point/spot lights we plan to use
-		if (loc_numP >= 0) glUniform1i(loc_numP, kNumPointLights); // 7 point lights
-		if (loc_numS >= 0) glUniform1i(loc_numS, kNumSpotLights); // 4 spot lights
-	}
-
-	// ensure shader program active (you already call activateRenderMeshesShaderProg() above)
-	renderer.setDirectionalLight(dirEye3, dirAmb, dirDiff, dirSpec);
-
-	// --- Point lights ---
-	for (int i = 0; i < NUM_POINT_LIGHTS; i++) {
-	    float pAux4[4];
-	    mu.multMatrixPoint(gmu::VIEW, pointLightPos[i], pAux4); // world->eye
-	    float pEye3[3] = { pAux4[0], pAux4[1], pAux4[2] };
-
-		float intensity = 10.0f;
-
-	    float pAmb[3]  = { 0.02f, 0.02f, 0.02f };
-	    float pDiff[3] = { 0.60f * intensity, 0.50f * intensity, 0.40f * intensity};
-	    float pSpec[3] = { 0.50f * intensity, 0.50f * intensity, 0.50f * intensity};
-
-	    // attenuation constants (example)
-	    float constant  = 1.0f;
-	    float linear    = 0.09f;
-	    float quadratic = 0.032f;
-		
-	    renderer.setPointLight(i, pEye3, pAmb, pDiff, pSpec, constant, linear, quadratic);
-	}
-
-	// --- Spotlights  ---
-	for (int i = 0; i < NUM_SPOT_LIGHTS; ++i) {
-
-		mu.pushMatrix(gmu::MODEL);
-		mu.translate(gmu::MODEL, drone.pos[0], drone.pos[1], drone.pos[2]);
-		mu.rotate(gmu::MODEL, drone.yaw,   0, 1, 0);
-		mu.rotate(gmu::MODEL, drone.pitch, 0, 0, 1);
-		mu.rotate(gmu::MODEL, drone.roll,  1, 0, 0);
-
-		// --- compute spotlight world position from local offset (w = 1) ---
-		float localOffset[4] = { spotLightOffset[i][0], spotLightOffset[i][1], spotLightOffset[i][2], 1.0f };
-		float worldPos4[4];
-		mu.multMatrixPoint(gmu::MODEL, localOffset, worldPos4); // MODEL -> world
-		float sAux4[4];
-		mu.multMatrixPoint(gmu::VIEW, worldPos4, sAux4);        // world -> eye
-		float sPos3[3] = { sAux4[0], sAux4[1], sAux4[2] };
-
-		// Rotation by +90 deg about Z: (x,y) -> (-y, x)
-		float localForward[4] = { 0.0f, 1.0f, 0.0f, 0.0f }; // w=0 because it's a direction
-		float localRotated[4] = {
-			-localForward[1],  // new X = -y
-			localForward[0],  // new Y = x
-			localForward[2],  // Z unchanged
-			0.0f
-		};
-
-		// Transform rotated local direction -> world -> eye (use w=0)
-		float worldDir4[4];
-		mu.multMatrixPoint(gmu::MODEL, localRotated, worldDir4); // MODEL->world (w still 0)
-		float eyeDir4[4];
-		mu.multMatrixPoint(gmu::VIEW, worldDir4, eyeDir4);       // world->eye (w=0 stays 0)
-
-		// Front or back
-		float sDir3[3] = { -eyeDir4[0], -eyeDir4[1], -eyeDir4[2] };
-		if (i >= 2) {
-			sDir3[0] =  eyeDir4[0];
-			sDir3[1] =  eyeDir4[1];
-			sDir3[2] =  eyeDir4[2];
-		}
-		
-		float len = sqrtf(sDir3[0]*sDir3[0] + sDir3[1]*sDir3[1] + sDir3[2]*sDir3[2]);
-		if (len > 1e-6f) { sDir3[0] /= len; sDir3[1] /= len; sDir3[2] /= len; }
-
-		// restore MODEL stack
-		mu.popMatrix(gmu::MODEL);
-
-		// --- rest of your spotlight parameters (unchanged) ---
-		float intensity = 5.0f;
-		float sAmb[3]  = { 1.0f, 1.0f, 1.0f };
-		float sDiff[3] = { 1.0f * intensity, 1.0f * intensity, 1.0f * intensity };
-		float sSpec[3] = { 0.8f * intensity, 0.8f * intensity, 0.8f * intensity };
-
-		if (i >= 2) {
-			intensity = 2.0f;
-			sAmb[0]  = 1.0f; sAmb[1]  = 0.0f; sAmb[2]  = 0.0f;
-			sDiff[0] = 2.0f * intensity; sDiff[1] = 0.0f; sDiff[2] = 0.0f;
-		}
-		const float PI = 3.14159265358979f;
-		float innerCutDeg = 12.5f, outerCutDeg = 17.5f;
-		float innerCutCos = cosf(innerCutDeg * PI / 180.0f);
-		float outerCutCos = cosf(outerCutDeg * PI / 180.0f);
-
-		float sConstant  = 1.0f;
-		float sLinear    = 0.09f;
-		float sQuadratic = 0.032f;
-
-		renderer.setSpotLight(i, sPos3, sDir3, innerCutCos, outerCutCos, sAmb, sDiff, sSpec, sConstant, sLinear, sQuadratic);
-	}
-
-
-	// Draw the terrain - myMeshes[6] contains the Quad object
-	mu.pushMatrix(gmu::MODEL);
-	mu.translate(gmu::MODEL, 0.0f, 0.0f, 0.0f);
-	mu.scale(gmu::MODEL, 100.0f, 0.1f, 100.0f);
-	mu.rotate(gmu::MODEL, -90.0f, 1.0f, 0.0f, 0.0f); // Rotate quad from XY to XZ plane
-
-	mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
-	mu.computeNormalMatrix3x3();
-
-	dataMesh data;
-
-	data.meshID = 6; // For the terrain (last mesh)
-	data.texMode = 7; // "two-texture" path in mesh.frag
-	data.vm = mu.get(gmu::VIEW_MODEL),
-	data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
-	data.normal = mu.getNormalMatrix();
-
-	// set terrain tiling
-	if (prog != 0) {
-		GLint loc_tile1 = glGetUniformLocation(prog, "terrainTile1");
-		GLint loc_tile2 = glGetUniformLocation(prog, "terrainTile2");
-		if (loc_tile1 >= 0) glUniform2f(loc_tile1, 64.0f, 64.0f);
-		if (loc_tile2 >= 0) glUniform2f(loc_tile2, 32.0f, 32.0f);
-	}
-
-	renderer.setIsModel(false);
-	renderer.renderMesh(data);
-	mu.popMatrix(gmu::MODEL);
-
-
-	glDisable(GL_CULL_FACE); // disable culling to see the buildings' inner faces
-
-	// time for animation (use your engine's clock if different)
-	const float tSeconds = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
-
-	// Draw the Buildings
-	data.meshID = 0; // (kept, but not used for the tower)
-
-	for (int i = 0; i < 6; ++i) {
-		for (int j = 0; j < 6; ++j) {
-
-			bool skip = false;
-			for (auto& p : openAreas) {
-				if (p.first == i && p.second == j) { skip = true; break; }
-			}
-			if (skip || ((i == 1 || i == 2) && j == 1)) continue;
-
-			mu.pushMatrix(gmu::MODEL);
-
-			// base position: center of the cell
-			const float worldX = -20.0f + i * 20.0f + BUILDING_WIDTH  * 0.5f;
-			const float worldZ = -20.0f + j * 20.0f + BUILDING_DEPTH  * 0.5f;
-
-			// --- floating effect (per-cell) ---
-			const float yBob =
-				gTowerBaseOffset[i][j] +
-				std::sin(tSeconds * gTowerFloatSpeed[i][j] + gTowerFloatPhase[i][j]) *
-				gTowerFloatAmp[i][j];
-
-			const float worldY = 25.0f + yBob;  // your previous baseline (20) + float offset
-
-			mu.translate(gmu::MODEL, worldX, worldY, worldZ);
-
-			if (renderer.droneMeshes.size() > 0 && towerScene != nullptr) {
-
-				mu.scale(gmu::MODEL, gTowerFitScale, gTowerFitScale, gTowerFitScale);
-
-
-				mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
-				mu.computeNormalMatrix3x3();
-
-				// set matrices to shader
-				data.texMode = 1; // textured
-				data.vm     = mu.get(gmu::VIEW_MODEL);
-				data.pvm    = mu.get(gmu::PROJ_VIEW_MODEL);
-				data.normal = mu.getNormalMatrix();
-
-				// highlight package source/destination: bump EMISSIVE (Ke) on the first tower mesh
-				float savedEmissive[4] = {0,0,0,0};
-				bool  changed = false;
-
-				if (currentPackage.active) {
-					const bool isSrc = (!currentPackage.pickedUp && i == currentPackage.src_i && j == currentPackage.src_j);
-					const bool isDst = ( currentPackage.pickedUp && i == currentPackage.dst_i && j == currentPackage.dst_j);
-
-					if (isSrc || isDst) {
-						if (!renderer.towerMeshes.empty()) {
-							// save old emissive (Ke)
-							memcpy(savedEmissive, renderer.towerMeshes[0].mat.emissive, sizeof(savedEmissive));
-
-							// set Ke to RED for source, GREEN for destination
-							const float col[4] = {
-								isSrc ? 0.0f : 1.0f,  // R
-								isSrc ? 1.0f : 0.0f,  // G
-								0.0f,                 // B
-								1.0f                  // A (unused in our shader, but keep 1)
-							};
-							memcpy(renderer.towerMeshes[0].mat.emissive, col, sizeof(col));
-							changed = true;
-						}
-					}
-				}
-
-				renderer.setIsModel(true);
-				aiRecursive_render(towerScene->mRootNode, renderer.towerMeshes, towerTextureIds);
-				renderer.setIsModel(false);
-
-				if (changed) {
-					memcpy(renderer.towerMeshes[0].mat.emissive, savedEmissive, sizeof(savedEmissive));
-				}
-
-			}
-
-			mu.popMatrix(gmu::MODEL);
-		}
-	}
-
-	glEnable(GL_CULL_FACE); // re-enable culling for other objects
-
-
-
 
 	// Update timers and states
 	static int lastBirdTime = glutGet(GLUT_ELAPSED_TIME);
@@ -2134,121 +2269,78 @@ void renderSim(void) {
 	// Check game state and interactions first
 	checkPackagePickupAndDelivery();
 
-	// Draw objects in correct order and ensure model matrix is reset for each
-	
-	drawBirds(data);  // Background elements first
-	drawPackage(data);  // Then package 
-	drawDrone(data);  // Draw drone last so it's on top
+	float mat[16];
 
+	glEnable(GL_DEPTH_TEST);
+	//REFLECTIONS AND SHADOWS
+	// 1. Reflection & shadow pass (only if camera above floor)
+    	if (camY > 0.0f) {  //camera in the upper side of the floor so render reflections and shadows. Inner product between the viewing direction and the normal of the ground
+		glEnable(GL_STENCIL_TEST);        // Escrever 1 no stencil buffer onde se for desenhar a reflex�o e a sombra
+		glStencilFunc(GL_NEVER, 0x1, 0x1);
+		glStencilOp(GL_REPLACE, GL_KEEP, GL_KEEP);
 
-	// Draw the Billboards
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	
-	renderer.setTexUnit(3, 4); // Billboard texture
+		// Fill stencil buffer with Ground shape; never rendered into color buffer
+		draw_floor();
 
-	data.meshID = 6; // Quad mesh for the billboards
-	for (int i=0; i<10; i++) {
-		for (int j=0; j<10; j++){
-			mu.pushMatrix(gmu::MODEL);
+		// Render  where  stencil buffer is 1
+		glStencilFunc(GL_EQUAL, 0x1, 0x1);
+		glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
 
-			billBoardPos[0] = i*10.0f; billBoardPos[1] = 3.0f; billBoardPos[2] = j*10.0f;
+		// Render the reflected geometry
+		setLights(true);
+		mu.pushMatrix(gmu::MODEL);
+		mu.scale(gmu::MODEL, 1.0f, -1.0f, 1.0f);
+		glCullFace(GL_FRONT);
+		draw_objects(false);  
+		glCullFace(GL_BACK);
+		mu.popMatrix(gmu::MODEL);
 
-			mu.translate(gmu::MODEL, billBoardPos[0], billBoardPos[1], billBoardPos[2]);
-			mu.scale(gmu::MODEL, BILLBOARD_SCALE, BILLBOARD_SCALE, BILLBOARD_SCALE); // Billboard size
-
-			l3dBillboardCylindricalBegin(cameraPos, billBoardPos);
-
-			data.texMode = 5;   //modulate diffuse color with texel color
-			data.vm = mu.get(gmu::VIEW_MODEL);
-			data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
-			data.normal = mu.getNormalMatrix();
-
-			mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
-			mu.computeNormalMatrix3x3();
-
-			renderer.renderMesh(data);
-			mu.popMatrix(gmu::MODEL);
-		}
-	}
-
-	glDisable(GL_BLEND);
-	renderer.setTexUnit(3, 3); // Reset to default texture unit
-
-	// Draw Particles (smoke) when battery low
-	if (!smoke_toggle && batteryLevel <= BATTERY_STAGES[0]) {
-		initParticles(0.8f);
-		smoke_toggle = true;
-	}
-	
-	if(smoke_toggle){
-		
-		float color, particle_rate;
-
-		if (batteryLevel <= BATTERY_STAGES[2]) {
-			color = 0.1f; particlesPerSpawn = 5; particleSpawnRate = 0.05f;
-		} else if (batteryLevel <= BATTERY_STAGES[1]) {
-			color = 0.5f; particlesPerSpawn = 10; particleSpawnRate = 0.5f;
-		} else if (batteryLevel <= BATTERY_STAGES[0]) {
-			color = 0.8f; particlesPerSpawn = 20; particleSpawnRate = 1.5f;
-		} else { 
-			color = 1.0f;
-		}
-		
-		updateParticles(dt, color);
-
-		data.meshID = 6; // For the quad
-		renderer.setTexUnit(3, 5);  //particle texture
-		data.texMode = 6;
-
+		setLights(false);
 
 		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);		// Blend specular floor with reflected geometry
+		draw_floor();
 
-		glDepthMask(GL_FALSE);  //Depth Buffer Read Only
 
 
-		for (int i = 0; i < MAX_PARTICLES; i++)
-		{
-			if (particle[i].life <= 0.0f) continue; //dead particle
-			
-			mu.pushMatrix(gmu::MODEL);
-			mu.translate(gmu::MODEL, particle[i].x, particle[i].y, particle[i].z);
-			mu.scale(gmu::MODEL, PARTICLE_SIZE, PARTICLE_SIZE, PARTICLE_SIZE); // Particle size
+		// Render the Shadows
+		float camPos[3] = { camX, camY, camZ };   // use camera's actual position vars
 
-			particlePos[0] = particle[i].x; particlePos[1] = particle[i].y; particlePos[2] = particle[i].z;
-			l3dBillboardSphericalBegin(cameraPos, particlePos);
+		float sunDirWorld[3] = { dirLightDir[0], dirLightDir[1], dirLightDir[2] };
+		normalize3(sunDirWorld, sunDirWorld);
 
-			data.vm = mu.get(gmu::VIEW_MODEL);
-			data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
-			data.normal = mu.getNormalMatrix();
+		const float SUN_DISTANCE = 1000.0f;   // try 1000–5000 depending on world units
 
-			// send matrices to OGL
-			mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
-			mu.computeNormalMatrix3x3();
+		float sunWorldPos[4];
+		sunWorldPos[0] = camPos[0] - sunDirWorld[0] * SUN_DISTANCE;
+		sunWorldPos[1] = camPos[1] - sunDirWorld[1] * SUN_DISTANCE;
+		sunWorldPos[2] = camPos[2] - sunDirWorld[2] * SUN_DISTANCE;
+		sunWorldPos[3] = 1.0f;
+		mu.shadow_matrix(mat, planeY, sunWorldPos);
 
-			// save
-			float savedDiffuse[4];
-			memcpy(savedDiffuse, renderer.myMeshes[data.meshID].mat.diffuse, sizeof(savedDiffuse));
+		glDisable(GL_DEPTH_TEST); //To force the shadow geometry to be rendered even if behind the floor
 
-			// set to particle color
-			renderer.myMeshes[data.meshID].mat.diffuse[0] = particle[i].r;
-			renderer.myMeshes[data.meshID].mat.diffuse[1] = particle[i].g;
-			renderer.myMeshes[data.meshID].mat.diffuse[2] = particle[i].b;
-			renderer.myMeshes[data.meshID].mat.diffuse[3] = particle[i].life; // alpha
+		//Dark the color stored in color buffer
+		glBlendFunc(GL_DST_COLOR, GL_ZERO);
+		glStencilOp(GL_KEEP, GL_KEEP, GL_ZERO);
 
-			// render
-			renderer.renderMesh(data);
+		mu.pushMatrix(gmu::MODEL);
+		mu.multMatrix(gmu::MODEL, mat);
+		draw_objects(true); //Render sphere and logo with constant color
+		mu.popMatrix(gmu::MODEL);
 
-			// restore
-			memcpy(renderer.myMeshes[data.meshID].mat.diffuse, savedDiffuse, sizeof(savedDiffuse));
+		glDisable(GL_STENCIL_TEST);
+		glDisable(GL_BLEND);
+		glEnable(GL_DEPTH_TEST);
 
-			mu.popMatrix(gmu::MODEL);
-		}
-		glDepthMask(GL_TRUE); //make depth buffer again writeable
-		renderer.setTexUnit(3, 3); // Reset to default texture unit
+		//render the geometry
+		draw_objects(false);
 	}
 
+	else {  //Camera behind the floor so render only the opaque objects
+		draw_floor();
+		draw_objects(false);
+	}
 
 	if (!isPaused && !isGameOver) {
 		updateBatteryAndDistance(dt);
@@ -2261,84 +2353,6 @@ void renderSim(void) {
 		} else drone.pos[1] += DRONE_FALL_VELOCITY * dt;
 	} 
 	
-
-	renderer.activateRenderMeshesShaderProg(); // ensure shader bound
-
-	// configure translucency
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glDepthMask(GL_FALSE); // don't write to depth buffer for translucent objects
-
-	// Decide whether to render inner faces (if camera inside) or outer faces.
-	// (Optional: compute camera world pos depending on cameraMode — here is a simple approximation)
-	float camWX=0.f, camWY=0.f, camWZ=0.f;
-	if (cameraMode == THIRD) {
-		float yawRad = drone.yaw * DEG2RAD;
-		// use camOrbitAngle / camOrbitRadius from your code
-		float finalAngle = camOrbitAngle - (camOrbitFollowYaw ? yawRad : 0.0f);
-		float ox = camOrbitRadius * cosf(finalAngle);
-		float oz = camOrbitRadius * sinf(finalAngle);
-		camWX = drone.pos[0] + ox;
-		camWY = drone.pos[1] + camOrbitHeight;
-		camWZ = drone.pos[2] + oz;
-	} else if (cameraMode == FOLLOW) {
-		camWX = drone.pos[0] + camX;
-		camWY = drone.pos[1] + camY;
-		camWZ = drone.pos[2] + camZ;
-	} else { // TOP modes: approximate
-		camWX = 0.0f; camWY = 50.0f; camWZ = 0.0f;
-	}
-
-	// camera distance test
-	float dx = camWX - CITY_CENTER[0];
-	float dy = camWY - CITY_CENTER[1];
-	float dz = camWZ - CITY_CENTER[2];
-	float camDist = sqrtf(dx*dx + dy*dy + dz*dz);
-	bool cameraInside = (camDist < DOME_RADIUS);
-
-	// set culling to draw appropriate faces
-	glEnable(GL_CULL_FACE);
-	if (cameraInside) {
-		glCullFace(GL_FRONT); // draw back faces so inner surface is visible
-	} else {
-		glCullFace(GL_BACK);  // draw front faces (normal outer view)
-	}
-
-	// transform + render dome (meshID 2 in your buildScene)
-	mu.pushMatrix(gmu::MODEL);
-	mu.translate(gmu::MODEL, CITY_CENTER[0], CITY_CENTER[1], CITY_CENTER[2]);
-	mu.scale(gmu::MODEL, DOME_RADIUS, DOME_RADIUS, DOME_RADIUS);
-	mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
-	mu.computeNormalMatrix3x3();
-
-	data.meshID = 2;  
-	data.texMode = 0;  
-	data.vm  = mu.get(gmu::VIEW_MODEL);
-	data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
-	data.normal = mu.getNormalMatrix();
-
-	// set alpha uniform (make sure mesh.frag has 'uniform float uAlpha;')
-	GLint progID = 0;
-	glGetIntegerv(GL_CURRENT_PROGRAM, &progID);
-	if (progID != 0) {
-		GLint loc_uAlpha = glGetUniformLocation(progID, "uAlpha");
-		if (loc_uAlpha >= 0) glUniform1f(loc_uAlpha, DOME_TRANSPARENCY); // 0.0 = fully transparent, 1.0 = opaque
-	}
-
-	// actually draw it
-	renderer.setIsModel(false);
-	renderer.renderMesh(data);
-	mu.popMatrix(gmu::MODEL);
-
-	// restore GL state
-	glDepthMask(GL_TRUE);
-	glDisable(GL_BLEND);
-	glCullFace(GL_BACK); // restore default
-	if (progID != 0) {
-		GLint loc_uAlpha = glGetUniformLocation(progID, "uAlpha");
-		if (loc_uAlpha >= 0) glUniform1f(loc_uAlpha, 1.0f); // reset alpha
-	}
-
 	if (flareEffect) {
 
 		int flarePos[2];
@@ -2349,14 +2363,13 @@ void renderSim(void) {
 		mu.loadIdentity(gmu::MODEL);
 		mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);  //pvm to be applied to lightPost. pvm is used in project function
 
-		float camPos[3] = { camX, camY, camZ };   // use your camera's actual position vars
+		float camPos[3] = { camX, camY, camZ };   // use camera's actual position vars
 
 		float sunDirWorld[3] = { dirLightDir[0], dirLightDir[1], dirLightDir[2] };
 		normalize3(sunDirWorld, sunDirWorld);
 
-		const float SUN_DISTANCE = 1000.0f;   // try 1000–5000 depending on your world units
+		const float SUN_DISTANCE = 1000.0f;   // try 1000–5000 depending on world units
 
-		// 4. Compute pseudo position in world space
 		float sunWorldPos[4];
 		sunWorldPos[0] = camPos[0] - sunDirWorld[0] * SUN_DISTANCE;
 		sunWorldPos[1] = camPos[1] - sunDirWorld[1] * SUN_DISTANCE;
@@ -2382,6 +2395,7 @@ void renderSim(void) {
 	}
 	
 	glBindTexture(GL_TEXTURE_2D, 0);	
+
 
 	//Render text (bitmap fonts) in screen coordinates. So use ortoghonal projection with viewport coordinates.
 	//Each glyph quad texture needs just one byte color channel: 0 in background and 1 for the actual character pixels. Use it for alpha blending
@@ -2471,6 +2485,8 @@ void renderSim(void) {
 		mu.scale(gmu::MODEL, barW, barH, 1.0f);
 		mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
 		mu.computeNormalMatrix3x3();
+
+		dataMesh data;
 
 		data.meshID = 7;      // same mesh used for both rects is okay
 		data.texMode = 0;
