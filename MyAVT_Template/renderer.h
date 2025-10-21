@@ -61,8 +61,10 @@ public:
   // can use the same locations the Renderer caches when its program is bound.
   GLint getPvmLoc() const { return pvm_loc; }
   GLint getVmLoc() const { return vm_loc; }
+  GLint getModelLoc() const { return model_loc;}
   GLint getNormalLoc() const { return normal_loc; }
   GLint getNormalMapLoc() const { return normalMap_loc; }
+  GLint getCubeMapLoc() const { return cubeMap_loc; }
   GLint getEmissiveMapLoc() const { return emissiveMap_loc; }
   GLint getSpecularMapLoc() const { return specularMap_loc; }
   GLint getDiffMapCountLoc() const { return diffMapCount_loc; }
@@ -103,6 +105,8 @@ public:
 
   void setTexUnit(int tuId, int texObjId);
 
+  void setCubeMapTexUnit(int texObjId);
+
   void setTexUnit(int tuId, GLuint texId);
 
   void resetModelMapUniforms();
@@ -124,6 +128,7 @@ public:
   /// Object of class Texture that manage an array of Texture Objects
   Texture TexObjArray;
   GLuint FlareTextureArray[7];
+  GLuint skyboxTexArray;
 
   FLARE_DEF AVTflare; 
 
@@ -135,7 +140,7 @@ private:
   // Text font rasterizer GLSL program
   GLuint textProgram;
 
-  GLint pvm_loc, vm_loc, normal_loc, lpos_loc, texMode_loc;
+  GLint pvm_loc, vm_loc, model_loc, normal_loc, cubeMap_loc, lpos_loc, texMode_loc;
 
   GLint normalMap_loc = -1;
   GLint emissiveMap_loc = -1;

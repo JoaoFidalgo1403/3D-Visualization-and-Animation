@@ -357,6 +357,8 @@ bool night_mode = false;
 bool plight_mode = true;
 bool headlights_mode = true;
 bool fog_mode = true;
+bool skybox_mode = true;
+
 
 // Render globals
 float cameraPos[3], billBoardPos[3], particlePos[3];
@@ -1125,13 +1127,19 @@ void processKeysDown(unsigned char key, int xx, int yy) {
 			} else {
 				printf("Game resumed\n");
 			}
-			break;			
+			break;		
+		case 'b':
+			skybox_mode = !skybox_mode;
+			if (skybox_mode)
+				printf("Skybox enabled, floor hidden\n");
+			else
+				printf("Floor enabled, skybox hidden\n");
+			break;
         case 'r':
             alpha = 57.0f; beta = 18.0f; r = 45.0f;
             camX = r * sin(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
             camZ = r * cos(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
             camY = r * sin(beta * 3.14f / 180.0f);
-			// reset game state (drone, battery, distance, score)
    			resetGameState();
 			printf("Game restarted/reset (R pressed)\n");
             break;
@@ -1354,7 +1362,7 @@ void render_flare(FLARE_DEF *flare, int lx, int ly, int *m_viewport) {  //lx, ly
 	renderer.activateRenderMeshesShaderProg();
 	GLint prog=0; glGetIntegerv(GL_CURRENT_PROGRAM,&prog);
 
-	glUniform1i(renderer.getTexModeLoc(), 8); // draw modulated textured particles 
+	glUniform1i(renderer.getTexModeLoc(), 9); // draw modulated textured particles 
 	glUniform1i(renderer.getTex0Loc(), 0);  //use TU 0
 
 	for (i = 0; i < flare->nPieces; ++i)
@@ -2246,6 +2254,44 @@ void renderSim(void) {
 			break;
 	}
 
+	renderer.setCubeMapTexUnit(6);
+	glUniform1i(renderer.getCubeMapLoc(), 6);
+
+	if(skybox_mode) {
+		int objId = 0;  
+		glUniform1i(renderer.getTexModeLoc(), 8);
+
+		//it won't write anything to the zbuffer; all subsequently drawn scenery to be in front of the sky box. 
+		glDepthMask(GL_FALSE); 
+		glFrontFace(GL_CW); // set clockwise vertex order to mean the front
+		
+		mu.pushMatrix(gmu::MODEL);
+		mu.pushMatrix(gmu::VIEW);  //se quiser anular a transla��o
+		
+		//  Fica mais realista se n�o anular a transla��o da c�mara 
+		// Cancel the translation movement of the camera - de acordo com o tutorial do Antons
+		mu.get(gmu::VIEW)[12] = 0.0f;
+		mu.get(gmu::VIEW)[13] = 0.0f;
+		mu.get(gmu::VIEW)[14] = 0.0f;
+
+		mu.scale(gmu::MODEL, 100.0f, 100.0f, 100.0f);
+		mu.translate(gmu::MODEL, -0.5f, -0.5f, -0.5f);
+
+		// send matrices to OGL
+		glUniformMatrix4fv(renderer.getModelLoc(), 1, GL_FALSE, mu.get(gmu::MODEL)); //Transforma��o de modela��o do cubo unit�rio para o "Big Cube"
+		mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+		glUniformMatrix4fv(renderer.getPvmLoc(), 1, GL_FALSE, mu.get(gmu::PROJ_VIEW_MODEL));
+
+		glBindVertexArray(renderer.myMeshes[objId].vao);
+		glDrawElements(renderer.myMeshes[objId].type, renderer.myMeshes[objId].numIndexes, GL_UNSIGNED_INT, 0);
+		glBindVertexArray(0);
+		mu.popMatrix(gmu::MODEL);
+		mu.popMatrix(gmu::VIEW);
+		
+		glFrontFace(GL_CCW); // restore counter clockwise vertex order to mean the front
+		glDepthMask(GL_TRUE);
+	}
+
 	//Light settings
 	renderer.setNightMode(night_mode);
 	renderer.setPLightMode(plight_mode);
@@ -2274,7 +2320,7 @@ void renderSim(void) {
 	glEnable(GL_DEPTH_TEST);
 	//REFLECTIONS AND SHADOWS
 	// 1. Reflection & shadow pass (only if camera above floor)
-    	if (camY > 0.0f) {  //camera in the upper side of the floor so render reflections and shadows. Inner product between the viewing direction and the normal of the ground
+    	if (camY > 0.0f && !skybox_mode) {  //camera in the upper side of the floor so render reflections and shadows. Inner product between the viewing direction and the normal of the ground
 		glEnable(GL_STENCIL_TEST);        // Escrever 1 no stencil buffer onde se for desenhar a reflex�o e a sombra
 		glStencilFunc(GL_NEVER, 0x1, 0x1);
 		glStencilOp(GL_REPLACE, GL_KEEP, GL_KEEP);
@@ -2296,12 +2342,9 @@ void renderSim(void) {
 		mu.popMatrix(gmu::MODEL);
 
 		setLights(false);
-
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);		// Blend specular floor with reflected geometry
 		draw_floor();
-
-
 
 		// Render the Shadows
 		float camPos[3] = { camX, camY, camZ };   // use camera's actual position vars
@@ -2338,8 +2381,9 @@ void renderSim(void) {
 	}
 
 	else {  //Camera behind the floor so render only the opaque objects
-		draw_floor();
-		draw_objects(false);
+		fog_mode = false;
+		setLights(false);
+		draw_objects(false);	
 	}
 
 	if (!isPaused && !isGameOver) {
@@ -2394,9 +2438,6 @@ void renderSim(void) {
 		mu.popMatrix(gmu::VIEW);
 	}
 	
-	glBindTexture(GL_TEXTURE_2D, 0);	
-
-
 	//Render text (bitmap fonts) in screen coordinates. So use ortoghonal projection with viewport coordinates.
 	//Each glyph quad texture needs just one byte color channel: 0 in background and 1 for the actual character pixels. Use it for alpha blending
 	//text to be rendered in last place to be in front of everything
@@ -2534,6 +2575,8 @@ void renderSim(void) {
 		
 	}
 	
+	glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+	glBindTexture(GL_TEXTURE_2D, 0);
 	glutSwapBuffers();
 }
 
@@ -2573,6 +2616,13 @@ void buildScene()
 	
 	renderer.TexObjArray.texture2D_Loader("assets/tree.tga");
 	renderer.TexObjArray.texture2D_Loader("assets/particle.tga");
+	
+	const char* filenames[] = {
+		"skybox2/px.jpg", "skybox2/nx.jpg",
+		"skybox2/py.jpg", "skybox2/ny.jpg",
+		"skybox2/pz.jpg", "skybox2/nz.jpg"
+	};
+	renderer.TexObjArray.textureCubeMap_Loader(filenames);
 
 
 	//Flare elements textures
@@ -2750,8 +2800,8 @@ void buildScene()
 
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
+	glCullFace(GL_BACK);		 // cull back face
 	glEnable(GL_MULTISAMPLE);
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); 
 
 
 	// set the camera position based on its spherical coordinates
@@ -2828,6 +2878,8 @@ int main(int argc, char **argv) {
 	
 	// Multisampling for smoother edges
 	glEnable(GL_MULTISAMPLE);
+	glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+
 	
 	// Clear color - black background
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);

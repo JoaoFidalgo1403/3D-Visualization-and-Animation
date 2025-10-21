@@ -177,6 +177,7 @@ bool Renderer::setRenderMeshesShaderProg(const std::string& vertShaderPath, cons
 
     pvm_loc = glGetUniformLocation(program, "m_pvm");
     vm_loc = glGetUniformLocation(program, "m_viewModel");
+	model_loc = glGetUniformLocation(program, "m_Model");
     normal_loc = glGetUniformLocation(program, "m_normal");
     texMode_loc = glGetUniformLocation(program, "texMode"); // different modes of texturing
     lpos_loc = glGetUniformLocation(program, "l_pos");
@@ -195,6 +196,7 @@ bool Renderer::setRenderMeshesShaderProg(const std::string& vertShaderPath, cons
     specularMap_loc = glGetUniformLocation(program, "specularMap");  // bool/int
     emissiveMap_loc   = glGetUniformLocation(program, "emissiveMap");    // bool/int
     diffMapCount_loc   = glGetUniformLocation(program, "diffMapCount");    // int
+    cubeMap_loc = glGetUniformLocation(program, "cubeMap");   
 
 
     // --- query directional light uniforms ---
@@ -501,6 +503,12 @@ void Renderer::setTexUnit(int tuId, int texObjId) {
     glActiveTexture(GL_TEXTURE0 + tuId);
     glBindTexture(GL_TEXTURE_2D, TexObjArray.getTextureId(texObjId));
     glUniform1i(tex_loc[tuId], tuId);
+}
+
+void Renderer::setCubeMapTexUnit(int texObjId) {
+    glActiveTexture(GL_TEXTURE6);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, TexObjArray.getTextureId(texObjId));
+    glUniform1i(cubeMap_loc, 6);
 }
 
 void Renderer::setTexUnit(int tuId, GLuint texId) {

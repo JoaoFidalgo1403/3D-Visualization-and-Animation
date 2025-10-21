@@ -8,6 +8,7 @@ uniform sampler2D texmap;
 uniform sampler2D texmap1;
 uniform sampler2D texmap2;
 uniform sampler2D texmap3;
+uniform samplerCube cubeMap;
 
 // ---------- Imported model-specific flags ----------
 uniform uint  diffMapCount;       // 0 = none, 1 = texUnitDiff0, 2 = texUnitDiff0 * texUnitDiff1
@@ -46,6 +47,7 @@ in Data {
     vec2 tex_coord;
     vec3 fragPos;    // eye-space frag pos
     mat3 TBN;        // tangent->eye (or tangent->world) basis
+	vec3 skyboxTexCoord;
 } DataIn;
 
 // ---------- Modes / misc ----------
@@ -278,6 +280,8 @@ void main() {
             vec3 texel1 = texture(texmap1, tiledTC1).rgb;
             vec3 outc = clamp(result * texel * texel1 + 0.07 * texel * texel1, 0.0, 1.0);
             finalColor = vec4(outc, uAlpha);
+        } else if (texMode == 8) {
+            finalColor = texture(cubeMap, DataIn.skyboxTexCoord);
         } else {
             vec4 texel = texture(texmap, DataIn.tex_coord);  //texel from element flare texture
             if((texel.a == 0.0)  || (mat.diffuse.a == 0.0) ) discard;
