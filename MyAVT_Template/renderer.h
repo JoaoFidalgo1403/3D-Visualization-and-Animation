@@ -9,6 +9,7 @@
 #include "texture.h"
 #include "model.h"
 #include "stb_truetype.h"
+#include "flare.h"
 
 struct dataMesh {
   int meshID = 0;  //mesh ID in the myMeshes array
@@ -65,6 +66,8 @@ public:
   GLint getEmissiveMapLoc() const { return emissiveMap_loc; }
   GLint getSpecularMapLoc() const { return specularMap_loc; }
   GLint getDiffMapCountLoc() const { return diffMapCount_loc; }
+  GLint getTexModeLoc() const { return texMode_loc; }
+  GLint getTex0Loc() const { return tex_loc[0]; }
 
   void setLightPos(float *lightPos);
 
@@ -120,6 +123,9 @@ public:
 
   /// Object of class Texture that manage an array of Texture Objects
   Texture TexObjArray;
+  GLuint FlareTextureArray[7];
+
+  FLARE_DEF AVTflare; 
 
 private:
 

@@ -40,7 +40,6 @@
 
 // Use Very Simple Libs
 #include "VSShaderlib.h"
-#include "AVTmathLib.h"
 
 #include "Texture_Loader.h"
 #include "meshFromAssimp.h"
@@ -97,15 +96,6 @@ GLuint* birdTextureIds;
 
 
 char model_dir[50];  //initialized by the user input at the console
-
-//External array storage defined in AVTmathLib.cpp
-
-/// The storage for matrices
-extern float mMatrix[COUNT_MATRICES][16];
-extern float mCompMatrix[COUNT_COMPUTED_MATRICES][16];
-
-/// The normal matrix
-extern float mNormal3x3[9];
 
 
 // --- Game state (battery/distance/score) ---
@@ -186,6 +176,20 @@ const float DEG2RAD = 3.14159265f / 180.0f;
 const float RAD2DEG = 180.0f / 3.14159265f;
 float camX, camY, camZ;
 
+// Flare effect
+bool flareEffect = true;
+float lightScreenPos[3];
+extern char * flareTextureNames[NTEXTURES] =  {"crcl", "flar", "hxgn", "ring", "sun",  "rain", "line"};
+
+
+inline double clamp(const double x, const double min, const double max) {
+	return (x < min ? min : (x > max ? max : x));
+}
+
+inline int clampi(const int x, const int min, const int max) {
+	return (x < min ? min : (x > max ? max : x));
+}
+
 // Camera Spherical Coordinates
 float alpha = 57.0f, beta = 18.0f;
 float r = 45.0f;
@@ -260,7 +264,7 @@ vector<vec3> drone_parts_position = {
 };
 
 struct Drone {
-    float pos[3] = {1.0f, 10.0f, -2.0f}; // Initial position
+    float pos[3] = {-90.0f, 75.0f, 40.0f}; // Initial position
 	float dir[3] = {0.0f, 1.0f, 0.0f}; // Initial direction (pointing up)
 	float velocity[3] = {0.0f, 0.0f, 0.0f}; // Initial velocity
 	float collisionVel[3] = {0.0f, 0.0f, 0.0f}; // Velocity of collision normal
@@ -305,14 +309,23 @@ std::vector<std::pair<int,int>> openAreas;
 
 // Dome parameters
 const float DOME_RADIUS = 100.0f;
-const float DOME_TRANSPARENCY = 0.75f;
+const float DOME_TRANSPARENCY = 0.25f;
 
 // --- Light parameters ---
 
-float lightPos[4] = {4.0f, 15.0f, 2.0f, 1.0f};
+float lightPos[4] = {100.0f, 35.0f, 100.0f, 1.0f};
 
 // Directional light
 float dirLightDir[4] = { -1.0f, -0.5f, -0.3f, 0.0f }; // directional light (w=0)
+// Pseudo sun position in world space (for lens flare, etc.)
+float gSunWorldPos[3] = {0.0f, 0.0f, 0.0f};
+
+static inline void normalize3(const float in[3], float out[3]) {
+    float len = sqrtf(in[0]*in[0] + in[1]*in[1] + in[2]*in[2]);
+    if (len > 1e-8f) { out[0] = in[0]/len; out[1] = in[1]/len; out[2] = in[2]/len; }
+    else { out[0] = out[1] = 0.0f; out[2] = -1.0f; }
+}
+
 
 // Light counts
 #define NUM_POINT_LIGHTS 7
@@ -1287,13 +1300,118 @@ void mouseWheel(int wheel, int direction, int x, int y) {
 // Render stuff
 //
 
-// lightDemo.cpp
-// lightDemo.cpp
-// Render an Assimp node hierarchy using the currently bound mesh shader program.
-//
-// allMeshes   : renderer.myMeshes (global vector).
-// textureIds  : array created by LoadGLTexturesTUs(...) for THIS scene.
-// baseIndex   : starting index in allMeshes where THIS model's meshes begin (e.g., droneModelStartIndex).
+
+// :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+// :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+// :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+// :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+// Adapted to your Renderer setup (uses global `renderer`, HUD mesh id = 7, shader uniforms from Renderer)
+
+// Assumes: global `Renderer renderer` and global `gmu mu` (from your codebase)
+// Uses HUD quad mesh stored at renderer.myMeshes[7] (created in init with createQuad(1,1))
+// Expects flare->element[i].textureId to be a GL texture id (use renderer.setTexUnit(0, GLuint))
+// If you store textures in TexObjArray by index instead, call renderer.setTexUnit(0, /*index*/)
+
+void render_flare(FLARE_DEF *flare, int lx, int ly, int *m_viewport) {  //lx, ly represent the projected position of light on viewport
+
+	int     dx, dy;          // Screen coordinates of "destination"
+	int     px, py;          // Screen coordinates of flare element
+	int		cx, cy;
+	float    maxflaredist, flaredist, flaremaxsize, flarescale, scaleDistance;
+	int     width, height, alpha;    // Piece parameters;
+	int     i;
+	float	diffuse[4];
+
+	GLint loc;
+
+	// Kill lighting/fog for this pass
+	glUniform1i(glGetUniformLocation(renderer.getProgram(), "night_mode"), GL_TRUE);
+	glUniform1i(glGetUniformLocation(renderer.getProgram(), "plight_mode"), GL_FALSE);
+	glUniform1i(glGetUniformLocation(renderer.getProgram(), "headlights_mode"), GL_FALSE);
+	glUniform1i(glGetUniformLocation(renderer.getProgram(), "fog_mode"), GL_FALSE);
+	glUniform1i(glGetUniformLocation(renderer.getProgram(), "uIsImportedModel"), GL_FALSE);
+
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE);  // or GL_ONE, GL_ONE
+
+	int screenMaxCoordX = m_viewport[0] + m_viewport[2] - 1;
+	int screenMaxCoordY = m_viewport[1] + m_viewport[3] - 1;
+
+	//viewport center
+	cx = m_viewport[0] + (int)(0.5f * (float)m_viewport[2]) - 1;
+	cy = m_viewport[1] + (int)(0.5f * (float)m_viewport[3]) - 1;
+
+	// Compute how far off-center the flare source is.
+	maxflaredist = sqrt(cx*cx + cy * cy);
+	flaredist = sqrt((lx - cx)*(lx - cx) + (ly - cy)*(ly - cy));
+	scaleDistance = (maxflaredist - flaredist) / maxflaredist;
+	flaremaxsize = (int)(m_viewport[2] * flare->fMaxSize);
+	flarescale = (int)(m_viewport[2] * flare->fScale);
+
+	// Destination is opposite side of centre from source
+	dx = clampi(cx + (cx - lx), m_viewport[0], screenMaxCoordX);
+	dy = clampi(cy + (cy - ly), m_viewport[1], screenMaxCoordY);
+
+	// Render each element. To be used Texture Unit 0
+	renderer.activateRenderMeshesShaderProg();
+	GLint prog=0; glGetIntegerv(GL_CURRENT_PROGRAM,&prog);
+
+	glUniform1i(renderer.getTexModeLoc(), 8); // draw modulated textured particles 
+	glUniform1i(renderer.getTex0Loc(), 0);  //use TU 0
+
+	for (i = 0; i < flare->nPieces; ++i)
+	{
+		// Position is interpolated along line between start and destination.
+		px = (int)((1.0f - flare->element[i].fDistance)*lx + flare->element[i].fDistance*dx);
+		py = (int)((1.0f - flare->element[i].fDistance)*ly + flare->element[i].fDistance*dy);
+		px = clampi(px, m_viewport[0], screenMaxCoordX);
+		py = clampi(py, m_viewport[1], screenMaxCoordY);
+
+		// Piece size are 0 to 1; flare size is proportion of screen width; scale by flaredist/maxflaredist.
+		width = (int)(scaleDistance*flarescale*flare->element[i].fSize);
+
+		// Width gets clamped, to allows the off-axis flaresto keep a good size without letting the elements get big when centered.
+		if (width > flaremaxsize)  width = flaremaxsize;
+
+		height = (int)((float)m_viewport[3] / (float)m_viewport[2] * (float)width);
+		memcpy(diffuse, flare->element[i].matDiffuse, 4 * sizeof(float));
+		diffuse[3] *= scaleDistance;   //scale the alpha channel
+
+		if (width > 1)
+		{
+			loc = glGetUniformLocation(prog, "mat.diffuse");
+			glUniform4fv(loc, 1, diffuse);
+
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_2D, renderer.FlareTextureArray[flare->element[i].textureId]);
+			mu.pushMatrix(gmu::MODEL);
+			mu.translate(gmu::MODEL, (float)(px - width * 0.0f), (float)(py - height * 0.0f), 0.0f);
+			mu.scale(gmu::MODEL, (float)width, (float)height, 1);
+			mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+			glUniformMatrix4fv(renderer.getVmLoc(), 1, GL_FALSE, mu.get(gmu::VIEW_MODEL));
+			glUniformMatrix4fv(renderer.getPvmLoc(), 1, GL_FALSE, mu.get(gmu::PROJ_VIEW_MODEL));
+			mu.computeNormalMatrix3x3();
+			glUniformMatrix3fv(renderer.getNormalLoc(), 1, GL_FALSE, mu.getNormalMatrix());
+
+			glBindVertexArray(renderer.myMeshes[7].vao);
+			glDrawElements(renderer.myMeshes[7].type, renderer.myMeshes[7].numIndexes, GL_UNSIGNED_INT, 0);
+			glBindVertexArray(0);
+			mu.popMatrix(gmu::MODEL);
+		}
+	}
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_CULL_FACE);
+	glDisable(GL_BLEND);
+}
+
+// :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+// :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+// :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+// :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+
 void aiRecursive_render(const aiNode* nd,
                         std::vector<struct MyMesh>& myMeshes,
                         GLuint*& textureIds)
@@ -1882,7 +2000,7 @@ void renderSim(void) {
 	// Draw the terrain - myMeshes[6] contains the Quad object
 	mu.pushMatrix(gmu::MODEL);
 	mu.translate(gmu::MODEL, 0.0f, 0.0f, 0.0f);
-	mu.scale(gmu::MODEL, 30.0f, 0.1f, 30.0f);
+	mu.scale(gmu::MODEL, 100.0f, 0.1f, 100.0f);
 	mu.rotate(gmu::MODEL, -90.0f, 1.0f, 0.0f, 0.0f); // Rotate quad from XY to XZ plane
 
 	mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
@@ -2221,6 +2339,50 @@ void renderSim(void) {
 		if (loc_uAlpha >= 0) glUniform1f(loc_uAlpha, 1.0f); // reset alpha
 	}
 
+	if (flareEffect) {
+
+		int flarePos[2];
+		int m_viewport[4];
+		glGetIntegerv(GL_VIEWPORT, m_viewport);
+
+		mu.pushMatrix(gmu::MODEL);
+		mu.loadIdentity(gmu::MODEL);
+		mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);  //pvm to be applied to lightPost. pvm is used in project function
+
+		float camPos[3] = { camX, camY, camZ };   // use your camera's actual position vars
+
+		float sunDirWorld[3] = { dirLightDir[0], dirLightDir[1], dirLightDir[2] };
+		normalize3(sunDirWorld, sunDirWorld);
+
+		const float SUN_DISTANCE = 1000.0f;   // try 1000–5000 depending on your world units
+
+		// 4. Compute pseudo position in world space
+		float sunWorldPos[4];
+		sunWorldPos[0] = camPos[0] - sunDirWorld[0] * SUN_DISTANCE;
+		sunWorldPos[1] = camPos[1] - sunDirWorld[1] * SUN_DISTANCE;
+		sunWorldPos[2] = camPos[2] - sunDirWorld[2] * SUN_DISTANCE;
+		sunWorldPos[3] = 1.0f;
+
+		
+		if (!mu.project(sunWorldPos, lightScreenPos, m_viewport))
+			printf("Error in getting projected light in screen\n");  //Calculate the window Coordinates of the light position: the projected position of light on viewport
+		flarePos[0] = clampi((int)lightScreenPos[0], m_viewport[0], m_viewport[0] + m_viewport[2] - 1);
+		flarePos[1] = clampi((int)lightScreenPos[1], m_viewport[1], m_viewport[1] + m_viewport[3] - 1);
+		mu.popMatrix(gmu::MODEL);
+
+		//viewer looking down at  negative z direction
+		mu.pushMatrix(gmu::PROJECTION);
+		mu.loadIdentity(gmu::PROJECTION);
+		mu.pushMatrix(gmu::VIEW);
+		mu.loadIdentity(gmu::VIEW);
+		mu.ortho(m_viewport[0], m_viewport[0] + m_viewport[2] - 1, m_viewport[1], m_viewport[1] + m_viewport[3] - 1, -1, 1);
+		render_flare(&renderer.AVTflare, flarePos[0], flarePos[1], m_viewport);
+		mu.popMatrix(gmu::PROJECTION);
+		mu.popMatrix(gmu::VIEW);
+	}
+	
+	glBindTexture(GL_TEXTURE_2D, 0);	
+
 	//Render text (bitmap fonts) in screen coordinates. So use ortoghonal projection with viewport coordinates.
 	//Each glyph quad texture needs just one byte color channel: 0 in background and 1 for the actual character pixels. Use it for alpha blending
 	//text to be rendered in last place to be in front of everything
@@ -2396,6 +2558,18 @@ void buildScene()
 	renderer.TexObjArray.texture2D_Loader("assets/tree.tga");
 	renderer.TexObjArray.texture2D_Loader("assets/particle.tga");
 
+
+	//Flare elements textures
+	glGenTextures(7, renderer.FlareTextureArray);
+	Texture2D_Loader(renderer.FlareTextureArray, "flare/crcl.tga", 0);
+	Texture2D_Loader(renderer.FlareTextureArray, "flare/flar.tga", 1);
+	Texture2D_Loader(renderer.FlareTextureArray, "flare/hxgn.png", 2);
+	Texture2D_Loader(renderer.FlareTextureArray, "flare/ring.tga", 3);
+	Texture2D_Loader(renderer.FlareTextureArray, "flare/sun.tga",  4);
+	Texture2D_Loader(renderer.FlareTextureArray, "flare/rain.png", 5);
+	Texture2D_Loader(renderer.FlareTextureArray, "flare/line.png", 6);
+
+
 	//Scene geometry with triangle meshes
 
 	MyMesh amesh;
@@ -2551,6 +2725,12 @@ void buildScene()
 	renderer.birdMeshes = createMeshFromAssimp(birdScene, birdTextureIds);
     if (!birdTextureIds) { printf("Bird textures not loaded\n"); }
 
+	// create geometry and VAO of the quad for flare elements
+	amesh = createQuad(1, 1);
+	renderer.myMeshes.push_back(amesh);
+	
+	//Load flare from file
+	loadFlareFile(&renderer.AVTflare, "flare/flare.txt");
 
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
@@ -2565,6 +2745,8 @@ void buildScene()
 
 	// Initialize tower floating parameters
 	initTowerFloating();
+
+
 
 }
 
@@ -2684,3 +2866,59 @@ int main(int argc, char **argv) {
 
 	return(0);
 }
+
+
+unsigned int getTextureId(char *name) {
+	int i;
+
+	for (i = 0; i < NTEXTURES; ++i)
+	{
+		if (strncmp(name, flareTextureNames[i], strlen(name)) == 0)
+			return i;
+	}
+	return -1;
+}
+void    loadFlareFile(FLARE_DEF *flare, char *filename)
+{
+	int     n = 0;
+	FILE    *f;
+	char    buf[256];
+	int fields;
+
+	memset(flare, 0, sizeof(FLARE_DEF));
+
+	f = fopen(filename, "r");
+	if (f)
+	{
+		fgets(buf, sizeof(buf), f);
+		sscanf(buf, "%f %f", &flare->fScale, &flare->fMaxSize);
+
+		while (!feof(f))
+		{
+			char            name[8] = { '\0', };
+			double          dDist = 0.0, dSize = 0.0;
+			float			color[4];
+			int				id;
+
+			fgets(buf, sizeof(buf), f);
+			fields = sscanf(buf, "%4s %lf %lf ( %f %f %f %f )", name, &dDist, &dSize, &color[3], &color[0], &color[1], &color[2]);
+			if (fields == 7)
+			{
+				for (int i = 0; i < 4; ++i) color[i] = clamp(color[i] / 255.0f, 0.0f, 1.0f);
+				id = getTextureId(name);
+				if (id < 0) printf("Texture name not recognized\n");
+				else
+					flare->element[n].textureId = id;
+				flare->element[n].fDistance = (float)dDist;
+				flare->element[n].fSize = (float)dSize;
+				memcpy(flare->element[n].matDiffuse, color, 4 * sizeof(float));
+				++n;
+			}
+		}
+
+		flare->nPieces = n;
+		fclose(f);
+	}
+	else printf("Flare file opening error\n");
+}
+

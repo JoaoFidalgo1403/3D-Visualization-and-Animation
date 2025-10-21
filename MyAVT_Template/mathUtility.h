@@ -7,7 +7,7 @@
  // The code comes with no warranties, use it at your own risk.
  // You may use it, or parts of it, wherever you want.
  // 
- // Author: João Madeiras Pereira
+ // Author: Joï¿½o Madeiras Pereira
  //
  * 
  ---------------------------------------------------------------*/

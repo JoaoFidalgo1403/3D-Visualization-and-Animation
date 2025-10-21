@@ -215,6 +215,8 @@ void main() {
         return;
     }
 
+    vec4 finalColor = vec4(0.0);  // local accumulator
+
     if (!uIsImportedModel) {
         // ===== Original path (unchanged lighting) =====
         vec3 n = normalize(DataIn.normal);
@@ -243,48 +245,45 @@ void main() {
 
         // Compose final color depending on texturing mode.
         if (texMode == 0) {
-            colorOut = vec4(clamp(result + mat.emissive.rgb, 0.0, 1.0), uAlpha);
+            finalColor = vec4(clamp(result + mat.emissive.rgb, 0.0, 1.0), uAlpha);
         } else if (texMode == 1) {
             vec3 texel = texture(texmap, DataIn.tex_coord).rgb;
             vec3 outc = clamp(result * texel + 0.07 * texel, 0.0, 1.0);
-            colorOut = vec4(outc, uAlpha);
+            finalColor = vec4(outc, uAlpha);
         } else if (texMode == 2) {
             vec3 texel = texture(texmap1, DataIn.tex_coord).rgb;
             vec3 outc = clamp(result * texel + 0.07 * texel, 0.0, 1.0);
-            colorOut = vec4(outc, uAlpha);
+            finalColor = vec4(outc, uAlpha);
         } else if (texMode == 3) {
             vec3 texel = texture(texmap2, DataIn.tex_coord).rgb;
             vec3 outc = clamp(result * texel + 0.07 * texel, 0.0, 1.0);
-            colorOut = vec4(outc, uAlpha);
+            finalColor = vec4(outc, uAlpha);
         } else if (texMode == 4) {
             vec3 texel = texture(texmap3, DataIn.tex_coord).rgb;
             vec3 outc = clamp(result * texel + 0.07 * texel, 0.0, 1.0);
-            colorOut = vec4(outc, uAlpha);
+            finalColor = vec4(outc, uAlpha);
         } else if (texMode == 5) { // Billboards
             vec4 texel = texture(texmap3, DataIn.tex_coord);
             vec3 outc = clamp(result * texel.rgb + 0.07 * texel.rgb, 0.0, 1.0);
             if (texel.a < 0.40) discard;
-            else colorOut = vec4(outc, texel.a);
+            else finalColor = vec4(outc, texel.a);
         } else if (texMode == 6) { // Particles
             vec4 texel = texture(texmap3, DataIn.tex_coord);
             if ((texel.a < 0.20) || (mat.diffuse.a == 0.0)) discard;
-            else colorOut = vec4(mat.diffuse.rgb, texel.a);
-        } else {
+            else finalColor = vec4(mat.diffuse.rgb, texel.a);
+        } else if (texMode == 7) {
             vec2 tiledTC1 = DataIn.tex_coord * terrainTile1;
             vec2 tiledTC2 = DataIn.tex_coord * terrainTile2;
             vec3 texel  = texture(texmap2, tiledTC2).rgb;
             vec3 texel1 = texture(texmap1, tiledTC1).rgb;
             vec3 outc = clamp(result * texel * texel1 + 0.07 * texel * texel1, 0.0, 1.0);
-            colorOut = vec4(outc, uAlpha);
+            finalColor = vec4(outc, uAlpha);
+        } else {
+            vec4 texel = texture(texmap, DataIn.tex_coord);  //texel from element flare texture
+            if((texel.a == 0.0)  || (mat.diffuse.a == 0.0) ) discard;
+            else finalColor = mat.diffuse * texel;
         }
 
-        // Fog
-        vec3 fogC = vec3(0.35, 0.18, 0.08);
-        float fDen = (fog_mode) ? 0.02 : 0.0;
-        float dist = length(DataIn.eye);
-        float fogFactor = clamp(exp(-pow(fDen * dist, 2.0)), 0.0, 1.0);
-        colorOut.rgb = mix(fogC, colorOut.rgb, fogFactor);
-        return;
     } else {
         // ===== Imported model path (now using emissive map) =====
 
@@ -356,13 +355,17 @@ void main() {
 
         // Output (emission is added to lit result)
         vec3 finalRGB = clamp(result + emissiveC, 0.0, 1.0);
-        colorOut = vec4(finalRGB, uAlpha);
-
-        // Fog (same treatment)
-        vec3 fogC = vec3(0.35, 0.18, 0.08);
-        float fDen = (fog_mode) ? 0.02 : 0.0;
-        float dist = length(DataIn.eye);
-        float fogFactor = clamp(exp(-pow(fDen * dist, 2.0)), 0.0, 1.0);
-        colorOut.rgb = mix(fogC, colorOut.rgb, fogFactor);
+        finalColor = vec4(finalRGB, uAlpha);
     }
+
+    // Fog (same treatment)
+    vec3 fogC = vec3(0.35, 0.18, 0.08);
+    float fDen = (fog_mode) ? 0.015 : 0.0;
+    float dist = length(DataIn.eye);
+    float fogFactor = clamp(exp(-pow(fDen * dist, 2.0)), 0.0, 1.0);
+    finalColor.rgb = mix(fogC, finalColor.rgb, fogFactor);
+
+    colorOut = finalColor;
+
+    return;
 }

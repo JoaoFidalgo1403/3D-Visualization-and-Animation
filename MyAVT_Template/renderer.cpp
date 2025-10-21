@@ -6,6 +6,7 @@
 #include "renderer.h"
 #include "mathUtility.h"
 #include "shader.h"
+#include "flare.h"
 
 #define STB_RECT_PACK_IMPLEMENTATION
 #define STB_TRUETYPE_IMPLEMENTATION

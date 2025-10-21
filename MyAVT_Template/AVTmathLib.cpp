@@ -5,7 +5,7 @@ AVT Math Lib
  *
 ALL resulting matrices are in COLUMN ORDER
 
-Author: João Madeiras Pereira
+Author: Joï¿½o Madeiras Pereira
 ----------------------------------------------------*/
 
 #include "AVTmathLib.h"
@@ -292,7 +292,7 @@ float *get(MatrixTypes aType)
 {
 	return mMatrix[aType];
 }
-/*
+
 // returns a pointer to the requested matrix
 float *get(ComputedMatrixTypes aType)
 {
@@ -302,7 +302,7 @@ float *get(ComputedMatrixTypes aType)
 
 	
 }
-*/
+
 
 // sets the square matrix mat to the identity matrix,
 // size refers to the number of rows (or columns)
