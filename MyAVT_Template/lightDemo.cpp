@@ -117,7 +117,7 @@ const float COLLISION_INVULN_DURATION = 2.0f; // seconds of invulnerability afte
 const float DRONE_BLINK_PERIOD = 0.12f;      // visual blink period while invulnerable
 
 // --- Billboard parameters ---
-const float BILLBOARD_SCALE = 0.2f;
+const float BILLBOARD_SCALE = 5.0f;
 
 // --- Particle parameters ---
 const int MAX_PARTICLES = 200;
@@ -264,12 +264,12 @@ vector<vec3> drone_parts_position = {
 };
 
 struct Drone {
-    float pos[3] = {-90.0f, 75.0f, 40.0f}; // Initial position
+    float pos[3] = {-150.0f, 75.0f, 100.0f}; // Initial position
 	float dir[3] = {0.0f, 1.0f, 0.0f}; // Initial direction (pointing up)
 	float velocity[3] = {0.0f, 0.0f, 0.0f}; // Initial velocity
 	float collisionVel[3] = {0.0f, 0.0f, 0.0f}; // Velocity of collision normal
     float throttle = 0.0f;             // current throttle level
-    float yaw = 0.0f;      // Rotation around Y (degrees)
+    float yaw = 20.0f;      // Rotation around Y (degrees)
     float pitch = 0.0f;    // Forward/backward tilt (degrees)
     float roll = 0.0f;     // Left/right tilt (degrees)
 };
@@ -357,7 +357,7 @@ bool night_mode = false;
 bool plight_mode = true;
 bool headlights_mode = true;
 bool fog_mode = true;
-bool skybox_mode = true;
+bool skybox_mode = false;
 
 
 // Render globals
@@ -1132,8 +1132,10 @@ void processKeysDown(unsigned char key, int xx, int yy) {
 			skybox_mode = !skybox_mode;
 			if (skybox_mode)
 				printf("Skybox enabled, floor hidden\n");
-			else
+			else {
 				printf("Floor enabled, skybox hidden\n");
+				fog_mode = true;
+			}
 			break;
         case 'r':
             alpha = 57.0f; beta = 18.0f; r = 45.0f;
@@ -1767,32 +1769,40 @@ static void draw_objects(bool shadowMode)
 	renderer.setTexUnit(3, 4); // Billboard texture
 
 	data.meshID = 6; // Quad mesh for the billboards
-	for (int i=0; i<0; i++) {
-		for (int j=0; j<10; j++){
-			mu.pushMatrix(gmu::MODEL);
+	
+	mu.pushMatrix(gmu::MODEL);
 
-			billBoardPos[0] = i*10.0f; billBoardPos[1] = 3.0f; billBoardPos[2] = j*10.0f;
+	billBoardPos[0] = 250.0f; billBoardPos[1] = 200.0f; billBoardPos[2] = -500;
 
-			mu.translate(gmu::MODEL, billBoardPos[0], billBoardPos[1], billBoardPos[2]);
-			mu.scale(gmu::MODEL, BILLBOARD_SCALE, BILLBOARD_SCALE, BILLBOARD_SCALE); // Billboard size
+	mu.translate(gmu::MODEL, billBoardPos[0], billBoardPos[1], billBoardPos[2]);
+	mu.scale(gmu::MODEL, BILLBOARD_SCALE, BILLBOARD_SCALE, BILLBOARD_SCALE); // Billboard size
 
-			l3dBillboardCylindricalBegin(cameraPos, billBoardPos);
+	l3dBillboardCylindricalBegin(cameraPos, billBoardPos);
 
-			data.texMode = 5;   //modulate diffuse color with texel color
-			data.vm = mu.get(gmu::VIEW_MODEL);
-			data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
-			data.normal = mu.getNormalMatrix();
+	data.texMode = 5;   //modulate diffuse color with texel color
+	data.vm = mu.get(gmu::VIEW_MODEL);
+	data.pvm = mu.get(gmu::PROJ_VIEW_MODEL);
+	data.normal = mu.getNormalMatrix();
 
-			mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
-			mu.computeNormalMatrix3x3();
+	mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
+	mu.computeNormalMatrix3x3();
 
-			renderer.renderMesh(data);
-			mu.popMatrix(gmu::MODEL);
-		}
-	}
+	renderer.setNightMode(false);
+	renderer.setPLightMode(false);
+	renderer.setHeadlightsMode(false);
+	renderer.setFogMode(false);
+
+	renderer.renderMesh(data);
+	mu.popMatrix(gmu::MODEL);
+
+
 
 	glDisable(GL_BLEND);
 	renderer.setTexUnit(3, 3); // Reset to default texture unit
+	renderer.setNightMode(night_mode);
+	renderer.setPLightMode(plight_mode);
+	renderer.setHeadlightsMode(headlights_mode);
+	renderer.setFogMode(fog_mode);
 
     // ---------------------------------------------------------------------
     // 4. Particles – billboarded smoke quads
@@ -2614,7 +2624,7 @@ void buildScene()
 	renderer.TexObjArray.texture2D_Loader("assets/noise2.jpg");
 	renderer.TexObjArray.texture2D_Loader("assets/drone.jpg");
 	
-	renderer.TexObjArray.texture2D_Loader("assets/tree.tga");
+	renderer.TexObjArray.texture2D_Loader("assets/bloodMoon.png");
 	renderer.TexObjArray.texture2D_Loader("assets/particle.tga");
 	
 	const char* filenames[] = {
@@ -2927,7 +2937,7 @@ int main(int argc, char **argv) {
 	return(1);
 
 	// Initialize birds
-	initBirds(30);
+	initBirds(60);
 
 	//  GLUT main loop
 	glutMainLoop();

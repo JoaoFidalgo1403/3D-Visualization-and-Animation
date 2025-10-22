@@ -266,7 +266,7 @@ void main() {
             finalColor = vec4(outc, uAlpha);
         } else if (texMode == 5) { // Billboards
             vec4 texel = texture(texmap3, DataIn.tex_coord);
-            vec3 outc = clamp(result * texel.rgb + 0.07 * texel.rgb, 0.0, 1.0);
+            vec3 outc = clamp(result * texel.rgb * 10.0 + 0.07 * texel.rgb, 0.0, 1.0);
             if (texel.a < 0.40) discard;
             else finalColor = vec4(outc, texel.a);
         } else if (texMode == 6) { // Particles
@@ -289,7 +289,7 @@ void main() {
         }
 
     } else {
-        // ===== Imported model path (now using emissive map) =====
+        // ===== Imported model path =====
 
         // ----- Normal (object or normal-mapped via TBN) -----
         vec3 n;
