@@ -141,7 +141,18 @@ typedef struct {
 Particle particle[MAX_PARTICLES];
 int deadNumParticles = 0;
 
+// Enables particles
 bool smoke_toggle = false;
+
+// Enables mirror
+bool mirror_toggle = true;
+
+// --- Mirror parameters ---
+GLuint mirrorFBO = 0, mirrorTexture = 0, mirrorDepthBuffer = 0;
+int gMirrorX = 20;              // left padding
+int gMirrorY = 0;               // will be set in changeSize (top-left anchor)
+int gMirrorW = 0;
+int gMirrorH = 0;
 
 // runtime
 float collisionInvulnTimer = 0.0f; // counts down; >0 => invulnerable
@@ -378,17 +389,37 @@ void timer(int value)
 }
 
 void changeSize(int w, int h) {
+    if (h == 0) h = 1;
+    WinX = w; WinY = h;
 
-	float ratio;
-	// Prevent a divide by zero, when window is too short
-	if(h == 0)
-		h = 1;
-	// set the viewport to be the entire window
-	glViewport(0, 0, w, h);
-	// set the projection matrix
-	ratio = (1.0f * w) / h;
-	mu.loadIdentity(gmu::PROJECTION);
-	mu.perspective(53.13f, ratio, 0.1f, 1000.0f);
+    glViewport(0, 0, w, h);
+
+    // --- mirror rectangle (top-left) ---
+    gMirrorW = (int)(0.40f * w);   // 40% of screen width
+    gMirrorH = (int)(0.20f * h);   // 20% of screen height
+    const int pad = 16;
+    gMirrorX = WinX - gMirrorW - pad;
+    gMirrorY = h - pad - gMirrorH;  // move down from the top edge
+
+    // --- main full-window projection ---
+    mu.loadIdentity(gmu::PROJECTION);
+    mu.perspective(53.13f, (1.0f * w) / h, 0.1f, 1000.0f);
+
+    // --- rebuild stencil: 0 everywhere, 1 in the mirror rectangle ---
+    glEnable(GL_STENCIL_TEST);
+    glStencilMask(0xFF);
+
+    // Clear stencil to 0
+    glDisable(GL_SCISSOR_TEST);
+    glClearStencil(0);
+    glClear(GL_STENCIL_BUFFER_BIT);
+
+    // Set mirror rect to 1 using scissor (pixel-accurate)
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(gMirrorX, gMirrorY, gMirrorW, gMirrorH);
+    glClearStencil(1);
+    glClear(GL_STENCIL_BUFFER_BIT);
+    glDisable(GL_SCISSOR_TEST);
 }
 
 
@@ -834,8 +865,6 @@ AABB computeBirdAABB(const Bird& b) {
 
 }
 
-
-
 bool checkCollision(const AABB &a, const AABB &b) {
     return (a.minX <= b.maxX && a.maxX >= b.minX) &&
            (a.minY <= b.maxY && a.maxY >= b.minY) &&
@@ -1139,6 +1168,10 @@ void processKeysDown(unsigned char key, int xx, int yy) {
    			resetGameState();
 			printf("Game restarted/reset (R pressed)\n");
             break;
+		case 't': // toggle rear-view mirror
+			mirror_toggle = !mirror_toggle;
+			printf("Rear-view mirror: %s\n", mirror_toggle ? "ON" : "OFF");
+			break;
         case 'x': glEnable(GL_MULTISAMPLE); break;
         case 'z': glDisable(GL_MULTISAMPLE); break;
         case '1': cameraMode = THIRD; printf("Camera mode: THIRD PERSON ORBIT\n"); break;
@@ -1642,7 +1675,7 @@ static void draw_floor(void) {
 
 }
 
-static void draw_objects(bool shadowMode)
+static void draw_objects(bool shadowMode, float dt)
 {
     dataMesh data;
 
@@ -1783,11 +1816,6 @@ static void draw_objects(bool shadowMode)
 
     // ---------------------------------------------------------------------
     // 4. Particles – billboarded smoke quads
-
-	static int lastTime = glutGet(GLUT_ELAPSED_TIME);
-	int now = glutGet(GLUT_ELAPSED_TIME);
-	float dt = (now - lastTime) * 0.001f;
-	lastTime = now;
 
     // Draw Particles (smoke) when battery low
 	if (!smoke_toggle && batteryLevel <= BATTERY_STAGES[0]) {
@@ -1944,7 +1972,6 @@ static void draw_objects(bool shadowMode)
 	}
 
 }
-
 
 // Place point lights at the top of the N tallest buildings
 void updatePointLightsFromBuildings()
@@ -2124,34 +2151,7 @@ void setLights(bool reflectionMode) {
 	}
 }
 
-
-void renderSim(void) {
-	FrameCount++;
-
-	static int lastFrameTime = glutGet(GLUT_ELAPSED_TIME);
-	int nowFrame = glutGet(GLUT_ELAPSED_TIME);
-	float frameDt = (nowFrame - lastFrameTime) * 0.001f; // seconds
-	lastFrameTime = nowFrame;
-
-	if (!isPaused && !isGameOver) {
-		applyKeyInputs(frameDt);
-		updateDroneState(frameDt);
-	}
-
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-
-	renderer.activateRenderMeshesShaderProg(); // use the required GLSL program to draw the meshes with illumination
-	
-	//Associate Texture Units to Objects Texture
-	renderer.setTexUnit(0, 0);
-	renderer.setTexUnit(1, 1);
-	renderer.setTexUnit(2, 2);
-	renderer.setTexUnit(3, 3);
-
-	// load identity matrices
-	mu.loadIdentity(gmu::VIEW);
-	mu.loadIdentity(gmu::MODEL);
-	
+void calculateCameraView() {
 	switch (cameraMode) {
 		case THIRD:
 			{
@@ -2240,12 +2240,34 @@ void renderSim(void) {
 			mu.perspective(53.13f, (1.0f * WinX) / WinY, 0.1f, 1000.0f);
 			break;
 	}
+}
 
-	renderer.setCubeMapTexUnit(6);
-	glUniform1i(renderer.getCubeMapLoc(), 6);
+static inline void calculateMirrorView(float aspect){
+    const float backDist = 6.0f; // how far behind the drone
+	const float liftY = 0.5f;   // tiny lift
+	// radians
+    const float yawRad = DEG2RAD * drone.yaw;
 
-	if(skybox_mode) {
-		int objId = 0;  
+    const float camX = drone.pos[0];
+	const float camY = drone.pos[1] + liftY;
+	const float camZ = drone.pos[2];
+
+    const float backX = -sinf(yawRad - PI/2.0f);
+    const float backZ = -cosf(yawRad - PI/2.0f);
+
+    const float lookX = camX - backDist * backX;
+    const float lookY = camY;
+    const float lookZ = camZ - backDist * backZ;
+
+    mu.loadIdentity(gmu::VIEW);
+    mu.lookAt(-camX, camY, camZ,  -lookX, lookY, lookZ, 0, 1, 0);
+
+	mu.loadIdentity(gmu::PROJECTION);
+    mu.perspective(80.0f, aspect, 0.1f, 1000.0f);
+}
+
+void renderSkybox() {
+	int objId = 0;  
 		glUniform1i(renderer.getTexModeLoc(), 8);
 
 		//it won't write anything to the zbuffer; all subsequently drawn scenery to be in front of the sky box. 
@@ -2277,37 +2299,15 @@ void renderSim(void) {
 		
 		glFrontFace(GL_CCW); // restore counter clockwise vertex order to mean the front
 		glDepthMask(GL_TRUE);
-	}
+}
 
-	//Light settings
-	renderer.setNightMode(night_mode);
-	renderer.setPLightMode(plight_mode);
-	renderer.setHeadlightsMode(headlights_mode);
-
-	//Fog Mode
-	renderer.setFogMode(fog_mode);
-
-	// Update timers and states
-	static int lastBirdTime = glutGet(GLUT_ELAPSED_TIME);
-	int nowBird = glutGet(GLUT_ELAPSED_TIME);
-	float dtBird = (nowBird - lastBirdTime) * 0.001f;
-	lastBirdTime = nowBird;
-	if (!isPaused) updateBirds(dtBird);
-
-	static int lastTime = glutGet(GLUT_ELAPSED_TIME);
-	int now = glutGet(GLUT_ELAPSED_TIME);
-	float dt = (now - lastTime) * 0.001f;
-	lastTime = now;
-
-	// Check game state and interactions first
-	checkPackagePickupAndDelivery();
-
+void reflectionsAndShadows(float dt) {
 	float mat[16];
-
+	
 	glEnable(GL_DEPTH_TEST);
 	//REFLECTIONS AND SHADOWS
 	// 1. Reflection & shadow pass (only if camera above floor)
-    	if (camY > 0.0f && !skybox_mode) {  //camera in the upper side of the floor so render reflections and shadows. Inner product between the viewing direction and the normal of the ground
+    if (camY > 0.0f && !skybox_mode) {  //camera in the upper side of the floor so render reflections and shadows. Inner product between the viewing direction and the normal of the ground
 		glEnable(GL_STENCIL_TEST);        // Escrever 1 no stencil buffer onde se for desenhar a reflex�o e a sombra
 		glStencilFunc(GL_NEVER, 0x1, 0x1);
 		glStencilOp(GL_REPLACE, GL_KEEP, GL_KEEP);
@@ -2324,7 +2324,7 @@ void renderSim(void) {
 		mu.pushMatrix(gmu::MODEL);
 		mu.scale(gmu::MODEL, 1.0f, -1.0f, 1.0f);
 		glCullFace(GL_FRONT);
-		draw_objects(false);  
+		draw_objects(false, dt);  
 		glCullFace(GL_BACK);
 		mu.popMatrix(gmu::MODEL);
 
@@ -2356,7 +2356,7 @@ void renderSim(void) {
 
 		mu.pushMatrix(gmu::MODEL);
 		mu.multMatrix(gmu::MODEL, mat);
-		draw_objects(true); //Render sphere and logo with constant color
+		draw_objects(true, dt); //Render sphere and logo with constant color
 		mu.popMatrix(gmu::MODEL);
 
 		glDisable(GL_STENCIL_TEST);
@@ -2364,71 +2364,75 @@ void renderSim(void) {
 		glEnable(GL_DEPTH_TEST);
 
 		//render the geometry
-		draw_objects(false);
-	}
-
-	else {  //Camera behind the floor so render only the opaque objects
+		draw_objects(false, dt);
+	} else {  //Camera behind the floor so render only the opaque objects
 		fog_mode = false;
 		setLights(false);
-		draw_objects(false);	
+		draw_objects(false, dt);	
 	}
+}
 
-	if (!isPaused && !isGameOver) {
-		updateBatteryAndDistance(dt);
-	} else if (!isPaused && isGameOver) {
-		if (drone.pos[1] <= 0.0f) {
-			drone.pos[1] = 0.0f;
-			drone.velocity[0] = 0.0f;
-			drone.velocity[1] = 0.0f;
-			drone.velocity[2] = 0.0f;
-		} else drone.pos[1] += DRONE_FALL_VELOCITY * dt;
-	} 
+void renderLensFlare() {
+	int flarePos[2];
+	int m_viewport[4];
+	glGetIntegerv(GL_VIEWPORT, m_viewport);
+
+	mu.pushMatrix(gmu::MODEL);
+	mu.loadIdentity(gmu::MODEL);
+	mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);  //pvm to be applied to lightPost. pvm is used in project function
+
+	float camPos[3] = { camX, camY, camZ };   // use camera's actual position vars
+
+	float sunDirWorld[3] = { dirLightDir[0], dirLightDir[1], dirLightDir[2] };
+	normalize3(sunDirWorld, sunDirWorld);
+
+	const float SUN_DISTANCE = 1000.0f;   // try 1000–5000 depending on world units
+
+	float sunWorldPos[4];
+	sunWorldPos[0] = camPos[0] - sunDirWorld[0] * SUN_DISTANCE;
+	sunWorldPos[1] = camPos[1] - sunDirWorld[1] * SUN_DISTANCE;
+	sunWorldPos[2] = camPos[2] - sunDirWorld[2] * SUN_DISTANCE;
+	sunWorldPos[3] = 1.0f;
+
 	
-	if (flareEffect) {
+	if (!mu.project(sunWorldPos, lightScreenPos, m_viewport))
+		printf("Error in getting projected light in screen\n");  //Calculate the window Coordinates of the light position: the projected position of light on viewport
+	flarePos[0] = clampi((int)lightScreenPos[0], m_viewport[0], m_viewport[0] + m_viewport[2] - 1);
+	flarePos[1] = clampi((int)lightScreenPos[1], m_viewport[1], m_viewport[1] + m_viewport[3] - 1);
+	mu.popMatrix(gmu::MODEL);
 
-		int flarePos[2];
-		int m_viewport[4];
-		glGetIntegerv(GL_VIEWPORT, m_viewport);
+	//viewer looking down at  negative z direction
+	mu.pushMatrix(gmu::PROJECTION);
+	mu.loadIdentity(gmu::PROJECTION);
+	mu.pushMatrix(gmu::VIEW);
+	mu.loadIdentity(gmu::VIEW);
+	mu.ortho(m_viewport[0], m_viewport[0] + m_viewport[2] - 1, m_viewport[1], m_viewport[1] + m_viewport[3] - 1, -1, 1);
+	render_flare(&renderer.AVTflare, flarePos[0], flarePos[1], m_viewport);
+	mu.popMatrix(gmu::PROJECTION);
+	mu.popMatrix(gmu::VIEW);
+}
 
-		mu.pushMatrix(gmu::MODEL);
-		mu.loadIdentity(gmu::MODEL);
-		mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);  //pvm to be applied to lightPost. pvm is used in project function
+void drawScene(float dt) {
+	renderer.setCubeMapTexUnit(6);
+	glUniform1i(renderer.getCubeMapLoc(), 6);
 
-		float camPos[3] = { camX, camY, camZ };   // use camera's actual position vars
+	if(skybox_mode) renderSkybox();
 
-		float sunDirWorld[3] = { dirLightDir[0], dirLightDir[1], dirLightDir[2] };
-		normalize3(sunDirWorld, sunDirWorld);
+	//Light settings
+	renderer.setNightMode(night_mode);
+	renderer.setPLightMode(plight_mode);
+	renderer.setHeadlightsMode(headlights_mode);
 
-		const float SUN_DISTANCE = 1000.0f;   // try 1000–5000 depending on world units
+	//Fog Mode
+	renderer.setFogMode(fog_mode);
 
-		float sunWorldPos[4];
-		sunWorldPos[0] = camPos[0] - sunDirWorld[0] * SUN_DISTANCE;
-		sunWorldPos[1] = camPos[1] - sunDirWorld[1] * SUN_DISTANCE;
-		sunWorldPos[2] = camPos[2] - sunDirWorld[2] * SUN_DISTANCE;
-		sunWorldPos[3] = 1.0f;
+	// Render reflections and shadows
+	reflectionsAndShadows(dt);
 
-		
-		if (!mu.project(sunWorldPos, lightScreenPos, m_viewport))
-			printf("Error in getting projected light in screen\n");  //Calculate the window Coordinates of the light position: the projected position of light on viewport
-		flarePos[0] = clampi((int)lightScreenPos[0], m_viewport[0], m_viewport[0] + m_viewport[2] - 1);
-		flarePos[1] = clampi((int)lightScreenPos[1], m_viewport[1], m_viewport[1] + m_viewport[3] - 1);
-		mu.popMatrix(gmu::MODEL);
+	if (flareEffect) renderLensFlare();
+}
 
-		//viewer looking down at  negative z direction
-		mu.pushMatrix(gmu::PROJECTION);
-		mu.loadIdentity(gmu::PROJECTION);
-		mu.pushMatrix(gmu::VIEW);
-		mu.loadIdentity(gmu::VIEW);
-		mu.ortho(m_viewport[0], m_viewport[0] + m_viewport[2] - 1, m_viewport[1], m_viewport[1] + m_viewport[3] - 1, -1, 1);
-		render_flare(&renderer.AVTflare, flarePos[0], flarePos[1], m_viewport);
-		mu.popMatrix(gmu::PROJECTION);
-		mu.popMatrix(gmu::VIEW);
-	}
-	
-	//Render text (bitmap fonts) in screen coordinates. So use ortoghonal projection with viewport coordinates.
-	//Each glyph quad texture needs just one byte color channel: 0 in background and 1 for the actual character pixels. Use it for alpha blending
-	//text to be rendered in last place to be in front of everything
-	
+void renderHUD() {
 	if(fontLoaded) {
 		glDisable(GL_DEPTH_TEST);
 		char distBuf[32];
@@ -2561,6 +2565,106 @@ void renderSim(void) {
 		glEnable(GL_DEPTH_TEST);
 		
 	}
+}
+
+void renderSim(void) {
+	FrameCount++;
+
+	static int lastFrameTime = glutGet(GLUT_ELAPSED_TIME);
+	int nowFrame = glutGet(GLUT_ELAPSED_TIME);
+	float frameDt = (nowFrame - lastFrameTime) * 0.001f; // seconds
+	lastFrameTime = nowFrame;
+
+	if (!isPaused && !isGameOver) {
+		applyKeyInputs(frameDt);
+		updateDroneState(frameDt);
+	}
+
+	if (!isPaused && !isGameOver) {
+		updateBatteryAndDistance(frameDt);
+	} else if (!isPaused && isGameOver) {
+		if (drone.pos[1] <= 0.0f) {
+			drone.pos[1] = 0.0f;
+			drone.velocity[0] = 0.0f;
+			drone.velocity[1] = 0.0f;
+			drone.velocity[2] = 0.0f;
+		} else drone.pos[1] += DRONE_FALL_VELOCITY * frameDt;
+	} 
+
+	if (!isPaused) updateBirds(frameDt);
+
+	// Check game state and interactions first
+	checkPackagePickupAndDelivery();
+
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	renderer.activateRenderMeshesShaderProg(); // use the required GLSL program to draw the meshes with illumination
+	
+	//Associate Texture Units to Objects Texture
+	renderer.setTexUnit(0, 0);
+	renderer.setTexUnit(1, 1);
+	renderer.setTexUnit(2, 2);
+	renderer.setTexUnit(3, 3);
+
+	// load identity matrices
+	mu.loadIdentity(gmu::VIEW);
+	mu.loadIdentity(gmu::MODEL);
+
+	
+	// =========================
+    //  MIRROR VIEW (stencil == 1)
+    // =========================
+
+	if (mirror_toggle) {
+		glStencilFunc(GL_EQUAL, 0x1, 0x1);    // pass only where stencil == 1
+		glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+
+		// Set mini-viewport that matches the mirror rectangle
+		glViewport(gMirrorX, gMirrorY, gMirrorW, gMirrorH);
+		const float mirrorAspect = (gMirrorW > 0 && gMirrorH > 0)
+			? (float)gMirrorW / (float)gMirrorH
+			: (float)WinX / (float)WinY;
+
+		mu.pushMatrix(gmu::VIEW);
+		mu.pushMatrix(gmu::PROJECTION);
+
+		calculateMirrorView(mirrorAspect);
+
+		// Flip horizontally like a real mirror (and fix culling while flipped)
+		glFrontFace(GL_CW);
+		mu.pushMatrix(gmu::MODEL);
+		mu.scale(gmu::MODEL, -1.0f, 1.0f, 1.0f);
+
+		// Draw the world as seen from the drone's rear camera
+		drawScene(frameDt);
+
+		mu.popMatrix(gmu::MODEL);
+		glFrontFace(GL_CCW);
+
+		// Restore VIEW/PROJECTION
+		mu.popMatrix(gmu::PROJECTION);
+		mu.popMatrix(gmu::VIEW);
+	}
+
+	// =========================
+    //  NORMAL VIEW (stencil != 1)
+    // =========================
+	if (mirror_toggle) {
+		glStencilFunc(GL_NOTEQUAL, 0x1, 0x1);      // pass where stencil != 1 (i.e., outside mirror)
+		glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+	} else {
+		glStencilFunc(GL_ALWAYS, 0x0, 0xFF);
+	}
+
+    // Restore full-window viewport
+    glViewport(0, 0, WinX, WinY);
+
+    // Your main camera & scene
+    calculateCameraView();
+    drawScene(frameDt);
+	
+	// Draw Text and HUD
+	renderHUD();
 	
 	glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 	glBindTexture(GL_TEXTURE_2D, 0);
@@ -2788,6 +2892,12 @@ void buildScene()
 	glCullFace(GL_BACK);		 // cull back face
 	glEnable(GL_MULTISAMPLE);
 
+	// --- Stencil setup ---
+	glClearStencil(0x0);
+	glEnable(GL_STENCIL_TEST);
+	glStencilMask(0xFF);
+	glStencilFunc(GL_ALWAYS, 0, 0xFF);
+	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
 
 	// set the camera position based on its spherical coordinates
 	camX = r * sin(alpha * 3.14f / 180.0f) * cos(beta * 3.14f / 180.0f);
@@ -2810,7 +2920,7 @@ int main(int argc, char **argv) {
 
 //  GLUT initialization
 	glutInit(&argc, argv);
-	glutInitDisplayMode(GLUT_DEPTH|GLUT_DOUBLE|GLUT_RGBA|GLUT_MULTISAMPLE);
+	glutInitDisplayMode(GLUT_DEPTH|GLUT_DOUBLE|GLUT_RGBA|GLUT_STENCIL|GLUT_MULTISAMPLE);
 
 	glutInitContextVersion (4, 3);
 	glutInitContextProfile (GLUT_CORE_PROFILE );
