@@ -100,7 +100,7 @@ char model_dir[50];  //initialized by the user input at the console
 
 // --- Game state (battery/distance/score) ---
 float batteryLevel = 1.0f;                        // 1.0 == full battery
-const float BATTERY_DRAIN_AT_FULL = 0.02f;        // fraction drained per second at full throttle (tweak)
+const float BATTERY_DRAIN_AT_FULL = 0.02f;        // fraction drained per second at full throttle
 const float COLLISION_BATTERY_PENALTY = 0.20f;    // lose 1/5 of total battery on collisions
 float distanceTraveled = 0.0f;                    // meters (world units)
 int scorePoints = 0;
@@ -198,7 +198,6 @@ float r = 45.0f;
 enum CameraMode { FOLLOW, THIRD, TOP_ORTHO, TOP_PERSPECTIVE };
 CameraMode cameraMode = THIRD;
 
-// Third-person/orbit camera parameters (tweak to taste)
 float camOrbitRadius    = 5.5f;   // distance from drone
 float camOrbitHeight    = 2.5f;    // vertical offset above drone
 float camOrbitSpeed     = 0.8f;    // radians per second (positive = orbit CCW)
@@ -460,7 +459,9 @@ void updateParticles(float dt, float color)
 		particle[i].life -= particle[i].fade * dt;
 	}
 }
-// :::::::::::::::::::::::::::::::::::::::::::::::: PACKAGE HANDLING :::::::::::::::::::::::::::::::::::::::::::::::::://///
+
+// :::::::::::::::::::::::::::::::::::::::::::::::: PACKAGE HANDLING ::::::::::::::::::::::::::::::::::::::::::::::::::
+
 static inline float towerBob(int i, int j) {
     const float t = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
     return gTowerBaseOffset[i][j]
@@ -520,6 +521,7 @@ void checkPackagePickupAndDelivery() {
 			printf("[PACKAGE] picked up\n");
 		}
 	}
+
 	// --- DELIVERY ---
 	else {
 		float dstX = -20.0f + currentPackage.dst_i * 20.0f + BUILDING_DEPTH / 2.0f;
@@ -549,9 +551,6 @@ void checkPackagePickupAndDelivery() {
 		}
 	}
 }
-
-
-
 
 // ------------------------------------------------------------
 //
@@ -760,7 +759,6 @@ void updateBirds(float dt) {
 // Collision Detection
 //
 
-
 AABB computeDroneAABB() {
     AABB box;
     float halfWidth = DRONE_WIDTH / 2.0f + 0.1f;
@@ -799,8 +797,6 @@ AABB computeBuildingAABB(int i, int j) {
     return box;
 }
 
-// Tune these to match bird model size at runtime.
-// Start generous; tighten after a quick visual test.
 static const float BIRD_HALF_WIDTH  = 0.35f;
 static const float BIRD_HEIGHT = 0.35f;
 static const float BIRD_FDEPTH = 0.2f;
@@ -825,7 +821,6 @@ AABB computeBirdAABB(const Bird& b) {
 		const float cy = b.pos[1] + cLocalY;
 		const float cz = b.pos[2] + s*cLocalX + 0.0f +  c *cLocalZ;
 
-		// extents after yaw: rows of R_yaw are [ c 0 -s ], [0 1 0], [ s 0  c ]
 		const float ex = fabsf(c)*hx + 0.0f*hy + fabsf(-s)*hz;
 		const float ey = hy;
 		const float ez = fabsf(s)*hx + 0.0f*hy + fabsf(c)*hz;
@@ -940,7 +935,6 @@ void handleCollisions() {
 				else                 normal[2] = (droneCz < birdCz) ? -1.f : 1.f;
 
 				// Optional: positional depenetration (nudge drone out so it doesn't stick)
-				// (Assumes you can directly move the drone's position.)
 				const float sep = minOverlap + 0.001f; // small slop
 				drone.pos[0] += normal[0] * sep;
 				drone.pos[1] += normal[1] * sep;
@@ -981,7 +975,7 @@ float wrapDegrees(float a) {
 	}
 
 void updateDroneState(float dt) {
-	// Parameters (tweak to taste)
+	// Parameters
     const float maxThrottle = 15.0f;   // upward accel when throttleCmd == 1
     const float maxTilt = 46.0f;            // degrees: maximum pitch/roll allowed
 	const float dampingFactor = 0.992f; // Reduce velocity by 50% on collision
@@ -1306,18 +1300,6 @@ void mouseWheel(int wheel, int direction, int x, int y) {
 // Render stuff
 //
 
-
-// :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-// :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-// :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-// :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-// Adapted to Renderer setup (uses global `renderer`, HUD mesh id = 7, shader uniforms from Renderer)
-
-// Assumes: global `Renderer renderer` and global `gmu mu` (from codebase)
-// Uses HUD quad mesh stored at renderer.myMeshes[7] (created in init with createQuad(1,1))
-// Expects flare->element[i].textureId to be a GL texture id (use renderer.setTexUnit(0, GLuint))
-// If you store textures in TexObjArray by index instead, call renderer.setTexUnit(0, /*index*/)
-
 void render_flare(FLARE_DEF *flare, int lx, int ly, int *m_viewport) {  //lx, ly represent the projected position of light on viewport
 
 	int     dx, dy;          // Screen coordinates of "destination"
@@ -1412,8 +1394,6 @@ void render_flare(FLARE_DEF *flare, int lx, int ly, int *m_viewport) {  //lx, ly
 	glDisable(GL_BLEND);
 }
 
-// :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-// :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
 void aiRecursive_render(const aiNode* nd,
                         std::vector<struct MyMesh>& myMeshes,
@@ -1559,14 +1539,12 @@ void drawPackage(dataMesh &data) {
     }
     // ----- Prefer the Assimp model if present; otherwise fallback to cube -----
     if (!renderer.packageMeshes.empty() && packageScene != nullptr) {
-        // scale model to old “0.4 cube” size — tweak augment if needed
         const float augment = 0.8f;
         mu.scale(gmu::MODEL,
                  augment * packageImportedScale,
                  augment * packageImportedScale,
                  augment * packageImportedScale);
 
-        // matrices & normal matrix are set inside aiRecursive_render already (you added that) :contentReference[oaicite:4]{index=4}
         renderer.setIsModel(true);
         aiRecursive_render(packageScene->mRootNode, renderer.packageMeshes, packageTextureIds);
         renderer.setIsModel(false);
@@ -1719,7 +1697,6 @@ static void draw_objects(bool shadowMode)
 
 					if (isSrc || isDst) {
 						if (!renderer.towerMeshes.empty()) {
-							// save old emissive (Ke)
 							memcpy(savedEmissive, renderer.towerMeshes[0].mat.emissive, sizeof(savedEmissive));
 
 							// set Ke to RED for source, GREEN for destination
@@ -2597,9 +2574,7 @@ void renderSim(void) {
 
 static void initTowerFloating()
 {
-    std::mt19937 rng(12345); // change seed if you want a different layout each run
-
-    // tweak ranges to taste
+    std::mt19937 rng(12345);
     std::uniform_real_distribution<float> baseDist(-5.0f,  5.0f);   // static lift (units)
     std::uniform_real_distribution<float> ampDist ( 0.5f,  2.0f);   // bob amplitude (units)
     std::uniform_real_distribution<float> phaseDist( 0.0f,  6.2831853f); // 0..2π
