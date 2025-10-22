@@ -1156,7 +1156,6 @@ void processKeysDown(unsigned char key, int xx, int yy) {
 				printf("Skybox enabled, floor hidden\n");
 			else {
 				printf("Floor enabled, skybox hidden\n");
-				fog_mode = true;
 			}
 			break;
         case 'r':
@@ -1662,7 +1661,7 @@ static void draw_floor(void) {
 		GLint loc_uAlpha = glGetUniformLocation(prog, "uAlpha");
 		if (loc1 >= 0) glUniform2f(loc1, 64.0f, 64.0f);
 		if (loc2 >= 0) glUniform2f(loc2, 32.0f, 32.0f);
-		if (loc_uAlpha >= 0) glUniform1f(loc_uAlpha, 0.4f); 
+		if (loc_uAlpha >= 0) glUniform1f(loc_uAlpha, 0.6f); 
 
 	}
 	
@@ -1718,10 +1717,9 @@ static void draw_objects(bool shadowMode, float dt)
 				mu.computeDerivedMatrix(gmu::PROJ_VIEW_MODEL);
 				mu.computeNormalMatrix3x3();
 
-
-				// highlight package source/destination: bump EMISSIVE (Ke) on the first tower mesh
-				float savedEmissive[4] = {0,0,0,0};
-				bool  changed = false;
+				// highlight package source/destination: bump EMISSIVE (Ke) on the first tower mesh (NORMAL PASS ONLY)
+				float savedEmissiveFirst[4] = {0,0,0,0};
+				bool  changedFirst = false;
 
 				if (!shadowMode && currentPackage.active) {
 					const bool isSrc = (!currentPackage.pickedUp && i == currentPackage.src_i && j == currentPackage.src_j);
@@ -1729,32 +1727,31 @@ static void draw_objects(bool shadowMode, float dt)
 
 					if (isSrc || isDst) {
 						if (!renderer.towerMeshes.empty()) {
-							memcpy(savedEmissive, renderer.towerMeshes[0].mat.emissive, sizeof(savedEmissive));
+							memcpy(savedEmissiveFirst, renderer.towerMeshes[0].mat.emissive, sizeof(savedEmissiveFirst));
 
 							// set Ke to RED for source, GREEN for destination
 							const float col[4] = {
 								isSrc ? 0.0f : 1.0f,  // R
 								isSrc ? 1.0f : 0.0f,  // G
 								0.0f,                 // B
-								1.0f                  // A (unused in our shader, but keep 1)
+								1.0f                  // A
 							};
 							memcpy(renderer.towerMeshes[0].mat.emissive, col, sizeof(col));
-							changed = true;
+							changedFirst = true;
 						}
 					}
 				}
 
-
-			// --- Shadow-mode override: remove color sources while drawing planar shadows ---
-				bool shadowOverrideApplied = false;
-				std::vector<std::vector<float>> savedAllEmissive;
-				std::vector<std::vector<float>> savedAllDiffuse;
-				std::vector<std::vector<float>> savedAllSpecular;
-
+				// --- Shadow-mode override: remove color sources while drawing planar shadows ---
 				if (shadowMode) {
 					const size_t n = renderer.towerMeshes.size();
+
+					std::vector<std::vector<float>> savedAllEmissive;
+					std::vector<std::vector<float>> savedAllDiffuse;
+					std::vector<std::vector<float>> savedAllSpecular;
+
 					savedAllEmissive.resize(n, std::vector<float>(4));
-					savedAllDiffuse.resize(n, std::vector<float>(4));
+					savedAllDiffuse.resize(n,  std::vector<float>(4));
 					savedAllSpecular.resize(n, std::vector<float>(4));
 
 					for (size_t m = 0; m < n; ++m) {
@@ -1767,23 +1764,34 @@ static void draw_objects(bool shadowMode, float dt)
 						const float darkGrey[4] = { 0.4f, 0.4f, 0.4f, 1.0f };
 						const float zero[4]     = { 0.0f, 0.0f, 0.0f, 1.0f };
 
-						memcpy(renderer.towerMeshes[m].mat.emissive, zero,    4*sizeof(float));
-						memcpy(renderer.towerMeshes[m].mat.specular, zero,    4*sizeof(float));
-						memcpy(renderer.towerMeshes[m].mat.diffuse,  darkGrey,4*sizeof(float));
+						memcpy(renderer.towerMeshes[m].mat.emissive, zero,     4*sizeof(float));
+						memcpy(renderer.towerMeshes[m].mat.specular, zero,     4*sizeof(float));
+						memcpy(renderer.towerMeshes[m].mat.diffuse,  darkGrey, 4*sizeof(float));
 					}
-					shadowOverrideApplied = true;
+
+					// DRAW towers for planar shadow (neutral)
+					renderer.setIsModel(true);
+					aiRecursive_render(towerScene->mRootNode, renderer.towerMeshes, towerTextureIds);
+					renderer.setIsModel(false);
+
+					// RESTORE materials immediately so normal pass can use real MTL Ke
+					for (size_t m = 0; m < n; ++m) {
+						memcpy(renderer.towerMeshes[m].mat.emissive, savedAllEmissive[m].data(), 4*sizeof(float));
+						memcpy(renderer.towerMeshes[m].mat.diffuse,  savedAllDiffuse[m].data(),  4*sizeof(float));
+						memcpy(renderer.towerMeshes[m].mat.specular, savedAllSpecular[m].data(), 4*sizeof(float));
+					}
 				}
+				else {
+					// NORMAL, lit draw — uses original MTL Ke (plus optional red/green on [0])
+					renderer.setIsModel(true);
+					aiRecursive_render(towerScene->mRootNode, renderer.towerMeshes, towerTextureIds);
+					renderer.setIsModel(false);
 
-
-
-				renderer.setIsModel(true);
-				aiRecursive_render(towerScene->mRootNode, renderer.towerMeshes, towerTextureIds);
-				renderer.setIsModel(false);
-
-				if (changed) {
-					memcpy(renderer.towerMeshes[0].mat.emissive, savedEmissive, sizeof(savedEmissive));
+					// Restore highlight emissive only if we changed it
+					if (changedFirst) {
+						memcpy(renderer.towerMeshes[0].mat.emissive, savedEmissiveFirst, sizeof(savedEmissiveFirst));
+					}
 				}
-
 			}
 
 			mu.popMatrix(gmu::MODEL);
@@ -1793,7 +1801,7 @@ static void draw_objects(bool shadowMode, float dt)
 	glEnable(GL_CULL_FACE); // re-enable culling for other objects
 
     // ---------------------------------------------------------------------
-   // ---------------------------------------------------------------------
+ 	// ---------------------------------------------------------------------
     // SHADOW PASS OVERRIDE FOR DYNAMIC CASTERS
     // Draw birds, package, drone as silhouettes for planar shadows and return.
     if (shadowMode) {
@@ -2365,7 +2373,7 @@ void reflectionsAndShadows(float dt) {
 	
 	glEnable(GL_DEPTH_TEST);
 	//REFLECTIONS AND SHADOWS
-    if (camY > 0.0f && !skybox_mode) {  //camera in the upper side of the floor so render reflections and shadows. Inner product between the viewing direction and the normal of the ground
+    if (camY > 0.0f) {  //camera in the upper side of the floor so render reflections and shadows. Inner product between the viewing direction and the normal of the ground
 		glEnable(GL_STENCIL_TEST);        // Escrever 1 no stencil buffer onde se for desenhar a reflex�o e a sombra
 		glStencilFunc(GL_NEVER, 0x1, 0x1);
 		glStencilOp(GL_REPLACE, GL_KEEP, GL_KEEP);
