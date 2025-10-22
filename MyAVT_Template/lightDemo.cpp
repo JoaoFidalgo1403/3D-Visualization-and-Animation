@@ -1724,7 +1724,7 @@ static void draw_objects(bool shadowMode, float dt)
 				float savedEmissive[4] = {0,0,0,0};
 				bool  changed = false;
 
-				if (currentPackage.active) {
+				if (!shadowMode && currentPackage.active) {
 					const bool isSrc = (!currentPackage.pickedUp && i == currentPackage.src_i && j == currentPackage.src_j);
 					const bool isDst = ( currentPackage.pickedUp && i == currentPackage.dst_i && j == currentPackage.dst_j);
 
@@ -1745,6 +1745,38 @@ static void draw_objects(bool shadowMode, float dt)
 					}
 				}
 
+
+			// --- Shadow-mode override: remove color sources while drawing planar shadows ---
+				bool shadowOverrideApplied = false;
+				std::vector<std::vector<float>> savedAllEmissive;
+				std::vector<std::vector<float>> savedAllDiffuse;
+				std::vector<std::vector<float>> savedAllSpecular;
+
+				if (shadowMode) {
+					const size_t n = renderer.towerMeshes.size();
+					savedAllEmissive.resize(n, std::vector<float>(4));
+					savedAllDiffuse.resize(n, std::vector<float>(4));
+					savedAllSpecular.resize(n, std::vector<float>(4));
+
+					for (size_t m = 0; m < n; ++m) {
+						// Save
+						memcpy(savedAllEmissive[m].data(), renderer.towerMeshes[m].mat.emissive, 4*sizeof(float));
+						memcpy(savedAllDiffuse[m].data(),  renderer.towerMeshes[m].mat.diffuse,  4*sizeof(float));
+						memcpy(savedAllSpecular[m].data(), renderer.towerMeshes[m].mat.specular, 4*sizeof(float));
+
+						// Force neutral dark color, no emission/specular
+						const float darkGrey[4] = { 0.4f, 0.4f, 0.4f, 1.0f };
+						const float zero[4]     = { 0.0f, 0.0f, 0.0f, 1.0f };
+
+						memcpy(renderer.towerMeshes[m].mat.emissive, zero,    4*sizeof(float));
+						memcpy(renderer.towerMeshes[m].mat.specular, zero,    4*sizeof(float));
+						memcpy(renderer.towerMeshes[m].mat.diffuse,  darkGrey,4*sizeof(float));
+					}
+					shadowOverrideApplied = true;
+				}
+
+
+
 				renderer.setIsModel(true);
 				aiRecursive_render(towerScene->mRootNode, renderer.towerMeshes, towerTextureIds);
 				renderer.setIsModel(false);
@@ -1762,8 +1794,28 @@ static void draw_objects(bool shadowMode, float dt)
 	glEnable(GL_CULL_FACE); // re-enable culling for other objects
 
     // ---------------------------------------------------------------------
-    // Stop here if drawing the shadow pass
-    if (shadowMode) return;
+   // ---------------------------------------------------------------------
+    // SHADOW PASS OVERRIDE FOR DYNAMIC CASTERS
+    // Draw birds, package, drone as silhouettes for planar shadows and return.
+    if (shadowMode) {
+        // Disable culling — planar projection can flip winding
+        GLboolean cullWasEnabled = glIsEnabled(GL_CULL_FACE);
+        if (cullWasEnabled) glDisable(GL_CULL_FACE);
+
+        // Ensure no special modes interfere (lighting/fog/tex decisions happen in renderer)
+        renderer.setNightMode(false);
+        renderer.setPLightMode(false);
+        renderer.setHeadlightsMode(false);
+        renderer.setFogMode(false);
+
+        // Draw only dynamic casters; leave billboards/particles/dome for color pass
+        drawBirds(data);
+        drawPackage(data);
+        drawDrone(data);
+
+        if (cullWasEnabled) glEnable(GL_CULL_FACE);
+        return;
+    }
 
     // ---------------------------------------------------------------------
     // 2. Dynamic objects: birds, package, and drone
@@ -2354,10 +2406,15 @@ void reflectionsAndShadows(float dt) {
 		glBlendFunc(GL_DST_COLOR, GL_ZERO);
 		glStencilOp(GL_KEEP, GL_KEEP, GL_ZERO);
 
+		GLboolean cullWasEnabled = glIsEnabled(GL_CULL_FACE);
+		if (cullWasEnabled) glDisable(GL_CULL_FACE);
+
 		mu.pushMatrix(gmu::MODEL);
 		mu.multMatrix(gmu::MODEL, mat);
 		draw_objects(true, dt); //Render sphere and logo with constant color
 		mu.popMatrix(gmu::MODEL);
+
+		if (cullWasEnabled) glEnable(GL_CULL_FACE);
 
 		glDisable(GL_STENCIL_TEST);
 		glDisable(GL_BLEND);
