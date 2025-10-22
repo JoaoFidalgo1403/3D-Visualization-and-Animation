@@ -963,7 +963,6 @@ void handleCollisions() {
 				else if (axis == 1) normal[1] = (droneCy < birdCy) ? -1.f : 1.f;
 				else                 normal[2] = (droneCz < birdCz) ? -1.f : 1.f;
 
-				// Optional: positional depenetration (nudge drone out so it doesn't stick)
 				const float sep = minOverlap + 0.001f; // small slop
 				drone.pos[0] += normal[0] * sep;
 				drone.pos[1] += normal[1] * sep;
@@ -1954,7 +1953,6 @@ static void draw_objects(bool shadowMode, float dt)
 	glDepthMask(GL_FALSE); // don't write to depth buffer for translucent objects
 
 	// Decide whether to render inner faces (if camera inside) or outer faces.
-	// (Optional: compute camera world pos depending on cameraMode — here is a simple approximation)
 	float camWX=0.f, camWY=0.f, camWZ=0.f;
 	if (cameraMode == THIRD) {
 		float yawRad = drone.yaw * DEG2RAD;
@@ -2002,16 +2000,23 @@ static void draw_objects(bool shadowMode, float dt)
 	data.normal = mu.getNormalMatrix();
 
 	// set alpha uniform (make sure mesh.frag has 'uniform float uAlpha;')
+	float oldKe[4];
+	const float domeKe[4] = {0,0,0,1};
 	GLint progID = 0;
 	glGetIntegerv(GL_CURRENT_PROGRAM, &progID);
 	if (progID != 0) {
 		GLint loc_uAlpha = glGetUniformLocation(progID, "uAlpha");
+		GLint loc_Ke = loc_Ke = glGetUniformLocation(progID, "mat.emissive");
 		if (loc_uAlpha >= 0) glUniform1f(loc_uAlpha, DOME_TRANSPARENCY); // 0.0 = fully transparent, 1.0 = opaque
+		glGetUniformfv(progID, loc_Ke, oldKe);
+		if (loc_Ke >= 0) glUniform4fv(loc_Ke, 1, domeKe);
 	}
 
-	// actually draw it
+
+	// draw the dome
 	renderer.setIsModel(false);
 	renderer.renderMesh(data);
+
 	mu.popMatrix(gmu::MODEL);
 
 	// restore GL state
@@ -2020,7 +2025,9 @@ static void draw_objects(bool shadowMode, float dt)
 	glCullFace(GL_BACK); // restore default
 	if (progID != 0) {
 		GLint loc_uAlpha = glGetUniformLocation(progID, "uAlpha");
+		GLint loc_Ke = glGetUniformLocation(progID, "mat.emissive");
 		if (loc_uAlpha >= 0) glUniform1f(loc_uAlpha, 1.0f); // reset alpha
+		if (loc_Ke >= 0) glUniform4fv(loc_Ke, 1, oldKe);
 	}
 
 }
@@ -2358,7 +2365,6 @@ void reflectionsAndShadows(float dt) {
 	
 	glEnable(GL_DEPTH_TEST);
 	//REFLECTIONS AND SHADOWS
-	// 1. Reflection & shadow pass (only if camera above floor)
     if (camY > 0.0f && !skybox_mode) {  //camera in the upper side of the floor so render reflections and shadows. Inner product between the viewing direction and the normal of the ground
 		glEnable(GL_STENCIL_TEST);        // Escrever 1 no stencil buffer onde se for desenhar a reflex�o e a sombra
 		glStencilFunc(GL_NEVER, 0x1, 0x1);
@@ -2391,7 +2397,7 @@ void reflectionsAndShadows(float dt) {
 		float sunDirWorld[3] = { dirLightDir[0], dirLightDir[1], dirLightDir[2] };
 		normalize3(sunDirWorld, sunDirWorld);
 
-		const float SUN_DISTANCE = 1000.0f;   // try 1000–5000 depending on world units
+		const float SUN_DISTANCE = 1000.0f; 
 
 		float sunWorldPos[4];
 		sunWorldPos[0] = camPos[0] - sunDirWorld[0] * SUN_DISTANCE;
@@ -2419,6 +2425,16 @@ void reflectionsAndShadows(float dt) {
 		glDisable(GL_STENCIL_TEST);
 		glDisable(GL_BLEND);
 		glEnable(GL_DEPTH_TEST);
+
+		// === Reset lighting/material state after planar shadow pass ===
+		renderer.setNightMode(night_mode);
+		renderer.setPLightMode(plight_mode);
+		renderer.setHeadlightsMode(headlights_mode);
+		renderer.setFogMode(fog_mode);
+
+		// also ensure lights are back to normal
+		setLights(false);
+
 
 		//render the geometry
 		draw_objects(false, dt);
