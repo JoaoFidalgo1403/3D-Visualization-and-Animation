@@ -2628,9 +2628,9 @@ void buildScene()
 	renderer.TexObjArray.texture2D_Loader("assets/particle.tga");
 	
 	const char* filenames[] = {
-		"skybox2/px.jpg", "skybox2/nx.jpg",
-		"skybox2/py.jpg", "skybox2/ny.jpg",
-		"skybox2/pz.jpg", "skybox2/nz.jpg"
+		"skybox/px.png", "skybox/nx.png",
+		"skybox/py.png", "skybox/ny.png",
+		"skybox/pz.png", "skybox/nz.png"
 	};
 	renderer.TexObjArray.textureCubeMap_Loader(filenames);
 
