@@ -1,1 +1,2 @@
-### 3D Game where the player controls a drone that must perform "deliveries" to gain points. This project was meant to learn about the creation of shaders, lighting, physics of a game through OpenGL libraries.
+### Game description & Motivation
+Created a 3D Game where the player controls a drone that must perform "deliveries" to gain points. This project was meant to learn about the creation of shaders, lighting, physics of a game through OpenGL libraries.
